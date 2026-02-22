@@ -1,0 +1,58 @@
+version: "2"
+run:
+  go: "1.24"
+linters:
+  enable:
+    - asciicheck
+    - bidichk
+    - bodyclose
+    - copyloopvar
+    - dogsled
+    - durationcheck
+    - errname
+    - errorlint
+    - gocheckcompilerdirectives
+    - goconst
+    - govet
+    - ineffassign
+    - intrange
+    - misspell
+    - nakedret
+    - noctx
+    - nolintlint
+    - prealloc
+    - revive
+    - staticcheck
+    - thelper
+    - unconvert
+    - unparam
+    - unused
+    - usestdlibvars
+    - wastedassign
+    - whitespace
+  exclusions:
+    generated: lax
+    rules:
+      - linters:
+          - goconst
+        path: .*_test\.go
+      - linters:
+          - unparam
+        path: .*_test\.go
+      - linters:
+          - errcheck
+        path: .*_test\.go
+        source: binary\.Write
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
+    - goimports
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
