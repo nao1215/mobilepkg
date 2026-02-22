@@ -1,0 +1,44 @@
+name: Mobile Security Scan
+
+on:
+  workflow_dispatch:
+    inputs:
+      artifact_path:
+        description: "Path to the mobile package file (APK/IPA/AAB)"
+        required: true
+        type: string
+      baseline_path:
+        description: "Path to baseline report.json (optional)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Build mobilepkg
+        run: make build
+
+      - name: Inspect mobile package
+        run: |
+          ARGS=""
+          if [ -n "${{ inputs.baseline_path }}" ]; then
+            ARGS="--baseline ${{ inputs.baseline_path }}"
+          fi
+          ./mobilepkg inspect $ARGS "${{ inputs.artifact_path }}" > report.json
+          ./mobilepkg inspect $ARGS --format markdown "${{ inputs.artifact_path }}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: mobilepkg-report
+          path: report.json
