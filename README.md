@@ -226,6 +226,11 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 [Sponsor this project](https://github.com/sponsors/nao1215)
 
+## Related or inspired Projects
+
+- [shogo82148/androidbinary](https://github.com/shogo82148/androidbinary): Android binary file parser written in golang
+- [nao1215/deapk(already public archived)](https://github.com/nao1215/deapk): parse android package (.apk), getting meta data and more.
+
 ## License
 
 [MIT License](LICENSE)
