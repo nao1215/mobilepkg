@@ -6,7 +6,7 @@ require (
 	github.com/izinga/aab-parser v1.0.1
 	github.com/nao1215/markdown v0.13.0
 	github.com/stretchr/testify v1.11.1
-	google.golang.org/protobuf v1.30.0
+	google.golang.org/protobuf v1.36.11
 	howett.net/plist v1.0.1
 )
 
