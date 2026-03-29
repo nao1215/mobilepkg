@@ -38,7 +38,7 @@ jobs:
           ./mobilepkg inspect $ARGS --format markdown "${{ inputs.artifact_path }}" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: mobilepkg-report
           path: report.json
