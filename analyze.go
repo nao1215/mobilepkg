@@ -26,6 +26,13 @@ func analyzeReport(rpt report, opts analyzeOptions) analysisResult {
 	result.findings = append(result.findings, analyzeDangerousPermissions(rpt)...)
 	result.findings = append(result.findings, analyzeIOSEntitlements(rpt)...)
 
+	// DEX-based security scanning for Android.
+	if rpt.Platform == PlatformAndroid && len(opts.dexReaders) > 0 {
+		dexFindings, dexDiags := analyzeDex(opts.dexReaders, rpt.Format, opts.maxEntryBytes)
+		result.findings = append(result.findings, dexFindings...)
+		result.report.Diagnostics = append(result.report.Diagnostics, dexDiags...)
+	}
+
 	// Extract deep link endpoints from exported component intent-filters.
 	result.report.NetworkEndpoints = append(result.report.NetworkEndpoints,
 		extractDeepLinkEndpoints(rpt.ExportedComponents)...)

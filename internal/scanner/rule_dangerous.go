@@ -1,0 +1,172 @@
+package scanner
+
+import "fmt"
+
+type dangerousAPIsRule struct{}
+
+func (r *dangerousAPIsRule) Name() string { return "DangerousAPIs" }
+
+// dangerousTarget defines a dangerous API call to detect.
+type dangerousTarget struct {
+	class    string
+	method   string
+	severity string
+	message  string
+}
+
+var dangerousTargets = []dangerousTarget{
+	{
+		class:    "java/lang/Runtime",
+		method:   "exec",
+		severity: "error",
+		message:  "Runtime.exec() called — potential command injection risk",
+	},
+	{
+		class:    "java/lang/ProcessBuilder",
+		method:   "<init>",
+		severity: "warn",
+		message:  "ProcessBuilder used — potential command execution",
+	},
+	{
+		class:    "dalvik/system/DexClassLoader",
+		method:   "<init>",
+		severity: "error",
+		message:  "DexClassLoader used — dynamic code loading may execute untrusted code",
+	},
+	{
+		class:    "dalvik/system/PathClassLoader",
+		method:   "<init>",
+		severity: "warn",
+		message:  "PathClassLoader used — dynamic code loading detected",
+	},
+	{
+		class:    "java/lang/reflect/Method",
+		method:   "invoke",
+		severity: "info",
+		message:  "reflection Method.invoke() used — may bypass access controls",
+	},
+	{
+		class:    "android/telephony/SmsManager",
+		method:   "sendTextMessage",
+		severity: "warn",
+		message:  "SmsManager.sendTextMessage() called — app can send SMS programmatically",
+	},
+	{
+		class:    "android/telephony/SmsManager",
+		method:   "sendMultipartTextMessage",
+		severity: "warn",
+		message:  "SmsManager.sendMultipartTextMessage() called — app can send SMS programmatically",
+	},
+	{
+		class:    "android/app/admin/DevicePolicyManager",
+		method:   "resetPassword",
+		severity: "error",
+		message:  "DevicePolicyManager.resetPassword() called — app can change device password",
+	},
+	{
+		class:    "javax/crypto/Cipher",
+		method:   "getInstance",
+		severity: "info",
+		message:  "cryptographic cipher usage detected — verify algorithm and mode are secure",
+	},
+}
+
+func (r *dangerousAPIsRule) Match(ctx *Context) []Finding {
+	var findings []Finding
+
+	for _, dt := range dangerousTargets {
+		if dt.severity == "info" {
+			findings = append(findings, matchAggregated(ctx, dt)...)
+		} else {
+			findings = append(findings, matchPerCallsite(ctx, dt)...)
+		}
+	}
+	return findings
+}
+
+// matchPerCallsite emits one finding per unique caller for error/warn APIs.
+// This ensures new callers appear as new findings in baseline diff.
+func matchPerCallsite(ctx *Context, dt dangerousTarget) []Finding {
+	var findings []Finding
+	seen := make(map[string]struct{})
+
+	for i, df := range ctx.DexFiles {
+		calls := df.FindMethodCalls(dt.class, dt.method)
+		for _, cs := range calls {
+			key := fmt.Sprintf("%s.%s", cs.CallerClass, cs.CallerMethod)
+			if _, ok := seen[key]; ok {
+				continue
+			}
+			seen[key] = struct{}{}
+
+			findings = append(findings, Finding{
+				ID:          fmt.Sprintf("dex.api.%s.%s.%s", sanitizeID(dt.class), dt.method, sanitizeID(cs.CallerClass)),
+				Category:    "dex_dangerous_api",
+				Severity:    dt.severity,
+				Confidence:  "high",
+				Message:     fmt.Sprintf("%s (in %s)", dt.message, cs.CallerClass),
+				ArchivePath: ctx.dexName(i),
+				Field:       fmt.Sprintf("%s->%s", cs.CallerClass, cs.CallerMethod),
+				Matched:     fmt.Sprintf("%s.%s()", dt.class, dt.method),
+				Offset:      int(cs.Offset),
+			})
+		}
+	}
+	return findings
+}
+
+// matchAggregated emits one finding per target API for info-severity APIs
+// to avoid excessive noise from ubiquitous calls like Method.invoke.
+func matchAggregated(ctx *Context, dt dangerousTarget) []Finding {
+	var totalCalls int
+	var firstCall *callInfo
+	seen := make(map[string]struct{})
+
+	for i, df := range ctx.DexFiles {
+		calls := df.FindMethodCalls(dt.class, dt.method)
+		for _, cs := range calls {
+			key := fmt.Sprintf("%s.%s", cs.CallerClass, cs.CallerMethod)
+			if _, ok := seen[key]; ok {
+				continue
+			}
+			seen[key] = struct{}{}
+			totalCalls++
+			if firstCall == nil {
+				firstCall = &callInfo{
+					callerClass:  cs.CallerClass,
+					callerMethod: cs.CallerMethod,
+					offset:       int(cs.Offset),
+					archivePath:  ctx.dexName(i),
+				}
+			}
+		}
+	}
+
+	if totalCalls == 0 {
+		return nil
+	}
+
+	msg := dt.message
+	if totalCalls > 1 {
+		msg = fmt.Sprintf("%s (%d call sites)", dt.message, totalCalls)
+	}
+
+	return []Finding{{
+		ID:          fmt.Sprintf("dex.api.%s.%s", sanitizeID(dt.class), dt.method),
+		Category:    "dex_dangerous_api",
+		Severity:    dt.severity,
+		Confidence:  "high",
+		Message:     msg,
+		ArchivePath: firstCall.archivePath,
+		Field:       fmt.Sprintf("%s->%s", firstCall.callerClass, firstCall.callerMethod),
+		Matched:     fmt.Sprintf("%s.%s()", dt.class, dt.method),
+		Offset:      firstCall.offset,
+	}}
+}
+
+type callInfo struct {
+	callerClass  string
+	callerMethod string
+	offset       int
+	archivePath  string
+}

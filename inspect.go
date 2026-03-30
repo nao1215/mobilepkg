@@ -47,14 +47,18 @@ func InspectFileWithOptions(ctx context.Context, path string, opts InspectOption
 		return nil, err
 	}
 
-	report, err := extractReport(ctx, path, opts)
+	f, ext, err := extractReportFromFile(ctx, path, opts)
 	if err != nil {
 		return nil, err
 	}
+	defer func() { _ = f.Close() }()
 
-	analysis := analyzeReport(report, analyzeOptions{})
+	analysis := analyzeReport(ext.report, analyzeOptions{
+		dexReaders:    ext.dexReaders,
+		maxEntryBytes: ext.maxEntryBytes,
+	})
 
-	return buildInspectResult(report, analysis), nil
+	return buildInspectResult(ext.report, analysis), nil
 }
 
 // InspectWithBaseline performs a complete inspection and compares the
@@ -69,16 +73,21 @@ func InspectWithBaseline(ctx context.Context, path string, baseline *InspectResu
 		return nil, err
 	}
 
-	report, err := extractReport(ctx, path, InspectOptions{})
+	f, ext, err := extractReportFromFile(ctx, path, InspectOptions{})
 	if err != nil {
 		return nil, err
 	}
+	defer func() { _ = f.Close() }()
 
 	// Convert baseline InspectResult to Report for internal comparison.
 	baselineReport := inspectResultToReport(baseline)
-	analysis := analyzeReport(report, analyzeOptions{baseline: &baselineReport})
+	analysis := analyzeReport(ext.report, analyzeOptions{
+		baseline:      &baselineReport,
+		dexReaders:    ext.dexReaders,
+		maxEntryBytes: ext.maxEntryBytes,
+	})
 
-	return buildInspectResult(report, analysis), nil
+	return buildInspectResult(ext.report, analysis), nil
 }
 
 // inspectResultToReport converts an InspectResult back to a report
@@ -112,14 +121,17 @@ func inspectResultToReport(ir *InspectResult) report {
 // It extracts metadata, runs security analysis, and returns a unified
 // [InspectResult].
 func Inspect(ctx context.Context, r io.ReaderAt, size int64) (*InspectResult, error) {
-	report, err := extractReportFromReader(ctx, r, size, InspectOptions{})
+	ext, err := extractReportFromReader(ctx, r, size, InspectOptions{})
 	if err != nil {
 		return nil, err
 	}
 
-	analysis := analyzeReport(report, analyzeOptions{})
+	analysis := analyzeReport(ext.report, analyzeOptions{
+		dexReaders:    ext.dexReaders,
+		maxEntryBytes: ext.maxEntryBytes,
+	})
 
-	return buildInspectResult(report, analysis), nil
+	return buildInspectResult(ext.report, analysis), nil
 }
 
 // buildInspectResult flattens a report and analysisResult into a single
@@ -145,38 +157,59 @@ func buildInspectResult(rpt report, analysis analysisResult) *InspectResult {
 		Findings:              analysis.findings,
 		SecretCandidates:      analysis.secretCandidates,
 		Diff:                  analysis.diff,
-		Diagnostics:           rpt.Diagnostics,
+		Diagnostics:           analysis.report.Diagnostics,
 	}
 }
 
-// extractReport opens the file at the given path and extracts a [report]
-// containing raw facts from the package. This is the internal extraction
-// step used by [InspectFile] and [InspectFileWithOptions].
-//
-// All available sections are always extracted. The file must be a valid
-// APK, XAPK, APKS, AAB, or IPA.
-func extractReport(ctx context.Context, path string, opts InspectOptions) (report, error) {
+// namedReader pairs a zip.Reader with a label identifying its origin
+// (e.g. "" for top-level APK/AAB, "base.apk" for a nested split).
+type namedReader struct {
+	label  string // empty for top-level archive
+	reader *zip.Reader
+}
+
+// extractionResult bundles the report with the ZIP reader and limits
+// so callers can pass them to analyzeReport for DEX scanning.
+type extractionResult struct {
+	report        report
+	zipReader     *zip.Reader   // top-level archive
+	dexReaders    []namedReader // all archives containing DEX files (splits, modules)
+	maxEntryBytes int64
+}
+
+// extractReportFromFile opens the file at the given path and extracts a
+// [report]. The caller must close the returned [*os.File] after analysis
+// is complete, because the ZIP reader in the returned [extractionResult]
+// references the file handle.
+func extractReportFromFile(ctx context.Context, path string, opts InspectOptions) (*os.File, extractionResult, error) {
 	if err := ctx.Err(); err != nil {
-		return report{}, err
+		return nil, extractionResult{}, err
 	}
 
 	f, err := os.Open(path)
 	if err != nil {
-		return report{}, err
+		return nil, extractionResult{}, err
 	}
-	defer func() { _ = f.Close() }()
 
 	fi, err := f.Stat()
 	if err != nil {
-		return report{}, err
+		_ = f.Close()
+		return nil, extractionResult{}, err
 	}
 
 	limits := effectiveLimits(opts)
 	if limits.MaxInputBytes > 0 && fi.Size() > limits.MaxInputBytes {
-		return report{}, wrapInspectError(ErrOversize)
+		_ = f.Close()
+		return nil, extractionResult{}, wrapInspectError(ErrOversize)
 	}
 
-	return extractReportFromReader(ctx, f, fi.Size(), opts)
+	ext, err := extractReportFromReader(ctx, f, fi.Size(), opts)
+	if err != nil {
+		_ = f.Close()
+		return nil, extractionResult{}, err
+	}
+
+	return f, ext, nil
 }
 
 // extractReportFromReader extracts a [report] from the given [io.ReaderAt].
@@ -190,9 +223,9 @@ func extractReport(ctx context.Context, path string, opts InspectOptions) (repor
 // as it can, and records non-fatal problems in [report.Diagnostics].
 // A non-nil error is returned only when the archive cannot be opened or
 // the primary manifest is missing/unparseable.
-func extractReportFromReader(ctx context.Context, r io.ReaderAt, size int64, opts InspectOptions) (report, error) {
+func extractReportFromReader(ctx context.Context, r io.ReaderAt, size int64, opts InspectOptions) (extractionResult, error) {
 	if err := ctx.Err(); err != nil {
-		return report{}, err
+		return extractionResult{}, err
 	}
 
 	zr, err := zip.NewReader(r, size)
@@ -200,13 +233,13 @@ func extractReportFromReader(ctx context.Context, r io.ReaderAt, size int64, opt
 		// zip.ErrFormat means it's simply not a ZIP file.
 		// Other errors (truncated, I/O failures) indicate a corrupt archive.
 		if errors.Is(err, zip.ErrFormat) {
-			return report{}, &InspectError{
+			return extractionResult{}, &InspectError{
 				Code:    "format.unsupported",
 				Message: "file is not a valid ZIP archive",
 				Err:     ErrUnsupportedFormat,
 			}
 		}
-		return report{}, &InspectError{
+		return extractionResult{}, &InspectError{
 			Code:    "archive.corrupt",
 			Message: "ZIP archive is corrupt or unreadable",
 			Err:     ErrArchiveCorrupt,
@@ -216,7 +249,7 @@ func extractReportFromReader(ctx context.Context, r io.ReaderAt, size int64, opt
 	limits := effectiveLimits(opts)
 
 	if err := validateArchive(zr, size, limits, 0); err != nil {
-		return report{}, wrapInspectError(err)
+		return extractionResult{}, wrapInspectError(err)
 	}
 
 	probe := probeZip(zr)
@@ -242,7 +275,7 @@ func extractReportFromReader(ctx context.Context, r io.ReaderAt, size int64, opt
 	case PlatformIOS:
 		rpt, err = inspectIOS(zr, sections, maxEntry)
 	default:
-		return report{}, &InspectError{
+		return extractionResult{}, &InspectError{
 			Code:    "format.unsupported",
 			Message: "unrecognized package format",
 			Err:     ErrUnsupportedFormat,
@@ -250,12 +283,42 @@ func extractReportFromReader(ctx context.Context, r io.ReaderAt, size int64, opt
 	}
 
 	if err != nil {
-		return report{}, wrapInspectError(err)
+		return extractionResult{}, wrapInspectError(err)
 	}
 
 	rpt.Format = probe.Format
 	sortReport(&rpt)
-	return rpt, nil
+
+	// Collect all zip.Readers that may contain DEX files.
+	// For APK/AAB: the top-level archive itself.
+	// For XAPK/APKS: every inner APK (base + splits + dynamic features).
+	var dexReaders []namedReader
+	if probe.Platform == PlatformAndroid {
+		switch probe.Format {
+		case FormatXAPK, FormatAPKS:
+			named, splitDiags := android.OpenAllInnerAPKs(zr, maxEntry)
+			for _, n := range named {
+				dexReaders = append(dexReaders, namedReader{label: n.Name, reader: n.Reader})
+			}
+			for _, d := range splitDiags {
+				rpt.Diagnostics = append(rpt.Diagnostics, Diagnostic{
+					Code:     d.Code,
+					Severity: Severity(d.Severity),
+					Message:  d.Message,
+				})
+			}
+		default:
+			// APK and AAB: the top-level archive contains DEX directly.
+			dexReaders = []namedReader{{reader: zr}}
+		}
+	}
+
+	return extractionResult{
+		report:        rpt,
+		zipReader:     zr,
+		dexReaders:    dexReaders,
+		maxEntryBytes: maxEntry,
+	}, nil
 }
 
 // buildAndroidReport converts an [android.Result] into a [report].

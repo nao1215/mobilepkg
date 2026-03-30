@@ -173,7 +173,8 @@ What gets detected:
 | Permissions | Dangerous permissions (CAMERA, SMS, LOCATION, etc.) |
 | iOS | `get-task-allow` (debug build) |
 | Endpoints | ATS exception domains, URL schemes, associated domains |
-| Secrets | Regex-based scan of manifest/plist/entitlement metadata (AWS keys, GitHub tokens, API keys, bearer tokens). Does not scan dex bytecode or resource files. |
+| Secrets | Regex-based scan of manifest/plist/entitlement metadata and DEX string tables (AWS keys, GCP API keys, GitHub tokens, API keys, bearer tokens, Firebase URLs). |
+| DEX bytecode | Hardcoded secrets, insecure WebView APIs, cleartext HTTP URLs, dangerous API calls (Runtime.exec, DexClassLoader, reflection, SMS). Scans all DEX files across base and split APKs (APK, XAPK, APKS) and all modules (AAB). |
 
 ### Fail conditions (CI)
 
