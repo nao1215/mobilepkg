@@ -10,7 +10,7 @@
 
 A Go library and CLI for fast mobile package triage. One call extracts metadata, permissions, exported components, signing info, and security findings from APK, XAPK, APKS, AAB, and IPA files. Designed for initial assessment — not a replacement for deep reverse-engineering tools.
 
-mobilepkg runs on Linux, Windows, and macOS, and supports Go 1.24 or later.
+mobilepkg runs on Linux, Windows, and macOS, and supports Go 1.25 or later.
 
 | Format | Platform | Description |
 |--------|----------|-------------|
