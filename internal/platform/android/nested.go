@@ -34,3 +34,38 @@ func findNestedAPK(zr *zip.Reader, candidates []string, maxBytes int64) (*zip.Re
 	}
 	return nil, fmt.Errorf("no APK found among candidates: %s", strings.Join(candidates, ", "))
 }
+
+// NamedZipReader pairs a zip.Reader with the archive entry name it was
+// opened from (e.g. "base.apk", "splits/base-master.apk").
+type NamedZipReader struct {
+	Name   string
+	Reader *zip.Reader
+}
+
+// OpenAllInnerAPKs opens every .apk entry inside the outer archive,
+// returning named readers and diagnostics for any that failed to open.
+func OpenAllInnerAPKs(zr *zip.Reader, maxEntryBytes int64) ([]NamedZipReader, []Diagnostic) {
+	seen := make(map[string]struct{})
+	var readers []NamedZipReader
+	var diags []Diagnostic
+	for _, f := range zr.File {
+		if !strings.HasSuffix(f.Name, ".apk") {
+			continue
+		}
+		if _, ok := seen[f.Name]; ok {
+			continue
+		}
+		seen[f.Name] = struct{}{}
+		inner, err := openNestedZip(zr, f.Name, maxEntryBytes)
+		if err != nil {
+			diags = append(diags, Diagnostic{
+				Code:     "dex.split_open_failed",
+				Severity: "warn",
+				Message:  fmt.Sprintf("failed to open inner APK %s for DEX scanning: %v", f.Name, err),
+			})
+			continue
+		}
+		readers = append(readers, NamedZipReader{Name: f.Name, Reader: inner})
+	}
+	return readers, diags
+}

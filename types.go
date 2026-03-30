@@ -208,6 +208,11 @@ type analysisResult struct {
 type analyzeOptions struct {
 	// baseline is a previous report for comparison. Nil means no baseline.
 	baseline *report
+	// dexReaders holds all named archive readers containing DEX files.
+	// Empty means DEX scanning is skipped (e.g. baseline-only comparison).
+	dexReaders []namedReader
+	// maxEntryBytes is the size limit for individual ZIP entries.
+	maxEntryBytes int64
 }
 
 // SigningInfo holds code signing and certificate information extracted
