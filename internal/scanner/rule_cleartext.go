@@ -40,6 +40,7 @@ var cleartextExclusions = []string{
 	"http://www.json.org",
 	"http://docs.oasis-open.org",
 	"http://relaxng.org",
+	"http://schemas.microsoft.com",
 }
 
 func (r *cleartextTrafficRule) Match(ctx *Context) []Finding {
