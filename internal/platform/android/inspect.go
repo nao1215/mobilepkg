@@ -163,7 +163,12 @@ func Inspect(zr *zip.Reader, sections uint64, r io.ReaderAt, size int64, maxEntr
 	result.AllowBackup = manifest.App.AllowBackup == "" || strings.EqualFold(manifest.App.AllowBackup, "true")
 	result.UsesCleartextTraffic = strings.EqualFold(manifest.App.UsesCleartextTraffic, "true")
 	result.TestOnly = strings.EqualFold(manifest.App.TestOnly, "true")
-	result.ProfileableByShell = strings.EqualFold(manifest.App.ProfileableByShell, "true")
+	for _, p := range manifest.App.Profileables {
+		if strings.EqualFold(p.Shell, "true") {
+			result.ProfileableByShell = true
+			break
+		}
+	}
 	result.NetworkSecurityConfig = manifest.App.NetworkSecurityConfig
 	result.NSCPolicy = parseNetworkSecurityConfig(zr, manifest.App.NetworkSecurityConfig, maxEntryBytes)
 
@@ -300,18 +305,22 @@ type usesSdk struct {
 }
 
 type application struct {
-	Label                 string     `xml:"label,attr"`
-	Icon                  string     `xml:"icon,attr"`
-	Debuggable            string     `xml:"debuggable,attr"`
-	AllowBackup           string     `xml:"allowBackup,attr"`
-	UsesCleartextTraffic  string     `xml:"usesCleartextTraffic,attr"`
-	NetworkSecurityConfig string     `xml:"networkSecurityConfig,attr"`
-	TestOnly              string     `xml:"testOnly,attr"`
-	ProfileableByShell    string     `xml:"profileableByShell,attr"`
-	Activities            []activity `xml:"activity"`
-	Services              []service  `xml:"service"`
-	Receivers             []receiver `xml:"receiver"`
-	Providers             []provider `xml:"provider"`
+	Label                 string        `xml:"label,attr"`
+	Icon                  string        `xml:"icon,attr"`
+	Debuggable            string        `xml:"debuggable,attr"`
+	AllowBackup           string        `xml:"allowBackup,attr"`
+	UsesCleartextTraffic  string        `xml:"usesCleartextTraffic,attr"`
+	NetworkSecurityConfig string        `xml:"networkSecurityConfig,attr"`
+	TestOnly              string        `xml:"testOnly,attr"`
+	Profileables          []profileable `xml:"profileable"`
+	Activities            []activity    `xml:"activity"`
+	Services              []service     `xml:"service"`
+	Receivers             []receiver    `xml:"receiver"`
+	Providers             []provider    `xml:"provider"`
+}
+
+type profileable struct {
+	Shell string `xml:"shell,attr"`
 }
 
 type activity struct {

@@ -2,6 +2,7 @@ package ios
 
 import (
 	"bytes"
+	"crypto/dsa" //nolint:staticcheck // type assertion only; not generating DSA keys
 	"crypto/ecdsa"
 	"crypto/rsa"
 	"crypto/sha256"
@@ -138,6 +139,9 @@ func certToResult(cert *x509.Certificate) CertResult {
 		keySize = 256
 	case x509.DSA:
 		pubKeyAlgo = "DSA"
+		if pk, ok := cert.PublicKey.(*dsa.PublicKey); ok && pk.P != nil {
+			keySize = pk.P.BitLen()
+		}
 	default:
 		pubKeyAlgo = cert.PublicKeyAlgorithm.String()
 	}
