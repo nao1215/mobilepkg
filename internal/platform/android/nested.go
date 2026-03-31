@@ -42,8 +42,15 @@ type NamedZipReader struct {
 	Reader *zip.Reader
 }
 
+// maxInnerAPKs is the maximum number of inner APK entries that
+// OpenAllInnerAPKs will process. This prevents a crafted bundle with
+// thousands of split APKs from consuming unbounded memory.
+const maxInnerAPKs = 200
+
 // OpenAllInnerAPKs opens every .apk entry inside the outer archive,
 // returning named readers and diagnostics for any that failed to open.
+// At most [maxInnerAPKs] inner APKs are opened; additional entries are
+// reported as diagnostics.
 func OpenAllInnerAPKs(zr *zip.Reader, maxEntryBytes int64) ([]NamedZipReader, []Diagnostic) {
 	seen := make(map[string]struct{})
 	var readers []NamedZipReader
@@ -56,6 +63,14 @@ func OpenAllInnerAPKs(zr *zip.Reader, maxEntryBytes int64) ([]NamedZipReader, []
 			continue
 		}
 		seen[f.Name] = struct{}{}
+		if len(readers) >= maxInnerAPKs {
+			diags = append(diags, Diagnostic{
+				Code:     "dex.too_many_inner_apks",
+				Severity: "warn",
+				Message:  fmt.Sprintf("inner APK count exceeds limit %d; skipping remaining entries", maxInnerAPKs),
+			})
+			break
+		}
 		inner, err := openNestedZip(zr, f.Name, maxEntryBytes)
 		if err != nil {
 			diags = append(diags, Diagnostic{

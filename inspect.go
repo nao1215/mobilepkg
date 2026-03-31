@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"sort"
@@ -298,6 +299,14 @@ func extractReportFromReader(ctx context.Context, r io.ReaderAt, size int64, opt
 		case FormatXAPK, FormatAPKS:
 			named, splitDiags := android.OpenAllInnerAPKs(zr, maxEntry)
 			for _, n := range named {
+				if err := validateArchive(n.Reader, 0, limits, 1); err != nil {
+					splitDiags = append(splitDiags, android.Diagnostic{
+						Code:     "inner_apk.validation_failed",
+						Severity: "warn",
+						Message:  fmt.Sprintf("inner APK %s failed validation: %v", n.Name, err),
+					})
+					continue
+				}
 				dexReaders = append(dexReaders, namedReader{label: n.Name, reader: n.Reader})
 			}
 			for _, d := range splitDiags {
