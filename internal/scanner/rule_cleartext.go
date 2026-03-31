@@ -20,7 +20,9 @@ var localhostHosts = map[string]struct{}{
 	"10.0.3.2":  {},
 }
 
-// commonFalsePositives filters out known non-URL strings that start with "http://".
+// cleartextExclusions filters out known non-URL strings that start with "http://".
+// These are XML namespace URIs, specification references, and example domains
+// that are not actual cleartext traffic destinations.
 var cleartextExclusions = []string{
 	"http://schemas.android.com",
 	"http://www.w3.org",
@@ -33,6 +35,11 @@ var cleartextExclusions = []string{
 	"http://www.apache.org",
 	"http://example.com",
 	"http://example.org",
+	"http://purl.org",
+	"http://json-schema.org",
+	"http://www.json.org",
+	"http://docs.oasis-open.org",
+	"http://relaxng.org",
 }
 
 func (r *cleartextTrafficRule) Match(ctx *Context) []Finding {
@@ -60,6 +67,11 @@ func (r *cleartextTrafficRule) Match(ctx *Context) []Finding {
 				continue
 			}
 			if _, ok := localhostHosts[host]; ok {
+				continue
+			}
+			// Skip hostnames without a dot — these are typically DEX string
+			// fragments or internal identifiers, not real network destinations.
+			if !strings.Contains(host, ".") {
 				continue
 			}
 
