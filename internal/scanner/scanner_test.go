@@ -168,19 +168,43 @@ func TestDefaultRules(t *testing.T) {
 	assert.Contains(t, names, "DangerousAPIs")
 }
 
-func TestCleartextTraffic_NoDotHostExcluded(t *testing.T) {
+func TestCleartextTraffic_ImplausibleHostExcluded(t *testing.T) {
 	t.Parallel()
 
 	df := buildTestDEXWithStrings(t, []string{
 		"http://wifi-not-enabled",
 		"http://some-internal-name/path",
+		"http://www./something",
 	})
 
 	ctx := &Context{DexFiles: []*dex.File{df}}
 	rule := &cleartextTrafficRule{}
 	findings := rule.Match(ctx)
 
-	assert.Empty(t, findings, "hostnames without a dot should be excluded")
+	assert.Empty(t, findings, "implausible hostnames should be excluded")
+}
+
+func TestIsPlausibleHostname(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		host     string
+		expected bool
+	}{
+		{"example.com", true},
+		{"api.example.com", true},
+		{"t.co", true},
+		{"wifi-not-enabled", false},
+		{"www.", false},
+		{"", false},
+		{"localhost", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.host, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, tt.expected, isPlausibleHostname(tt.host))
+		})
+	}
 }
 
 func TestIsKnownLibraryClass(t *testing.T) {

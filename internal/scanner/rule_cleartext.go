@@ -69,9 +69,10 @@ func (r *cleartextTrafficRule) Match(ctx *Context) []Finding {
 			if _, ok := localhostHosts[host]; ok {
 				continue
 			}
-			// Skip hostnames without a dot — these are typically DEX string
-			// fragments or internal identifiers, not real network destinations.
-			if !strings.Contains(host, ".") {
+			// Skip hostnames that are not plausible domain names — they need
+			// at least two labels (e.g. "example.com"), not just "www." or
+			// a bare word without dots.
+			if !isPlausibleHostname(host) {
 				continue
 			}
 
@@ -93,6 +94,18 @@ func (r *cleartextTrafficRule) Match(ctx *Context) []Finding {
 		}
 	}
 	return findings
+}
+
+// isPlausibleHostname returns true if the host looks like a real domain name
+// with at least two non-empty labels (e.g. "example.com"). This filters out
+// bare words ("wifi-not-enabled") and trailing-dot fragments ("www.").
+func isPlausibleHostname(host string) bool {
+	parts := strings.Split(host, ".")
+	if len(parts) < 2 {
+		return false
+	}
+	// Both the first and last labels must be non-empty.
+	return parts[0] != "" && parts[len(parts)-1] != ""
 }
 
 func isCleartextExcluded(s string) bool {
