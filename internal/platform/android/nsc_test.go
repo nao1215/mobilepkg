@@ -133,12 +133,15 @@ func TestInspectXAPK_FallbackAndMerge(t *testing.T) {
 		"base.apk":      innerAPK,
 	})
 
-	result, diags, err := InspectXAPK(zr, (1<<0)|(1<<1)|(1<<3)|(1<<5), 1<<20)
+	result, diags, err := InspectXAPK(zr, (1<<0)|(1<<1)|(1<<3)|(1<<5), 1<<20, nil)
 	if err != nil {
 		t.Fatalf("InspectXAPK: %v", err)
 	}
-	if len(diags) != 0 {
-		t.Fatalf("diags = %#v, want none", diags)
+	// The inner APK in this test has a plain-text manifest (not binary XML),
+	// so parsing fails and we fall back to manifest.json. The fallback now
+	// emits a diagnostic instead of silently succeeding.
+	if len(diags) != 1 || diags[0].Code != "xapk.base_apk_parse_failed" {
+		t.Fatalf("diags = %#v, want single xapk.base_apk_parse_failed diagnostic", diags)
 	}
 	if result.PackageName != "com.example.xapk" || result.Label != "XAPK Test App" {
 		t.Fatalf("identity = %q/%q", result.PackageName, result.Label)
@@ -204,7 +207,7 @@ func TestInspectAPKSAndNestedZip(t *testing.T) {
 			"splits/base-master.apk": innerAPK,
 		})
 
-		inner, err := findBaseMasterAPK(zr, 1<<20)
+		inner, err := findBaseMasterAPK(zr, 1<<20, nil)
 		if err != nil {
 			t.Fatalf("findBaseMasterAPK: %v", err)
 		}
@@ -212,7 +215,7 @@ func TestInspectAPKSAndNestedZip(t *testing.T) {
 			t.Fatal("inner archive is empty")
 		}
 
-		if _, _, err := InspectAPKS(zr, 0xFF, 1<<20); err == nil {
+		if _, _, err := InspectAPKS(zr, 0xFF, 1<<20, nil); err == nil {
 			t.Fatal("InspectAPKS error = nil, want parse error from inner APK")
 		}
 	})
@@ -222,7 +225,7 @@ func TestInspectAPKSAndNestedZip(t *testing.T) {
 			"universal.apk": innerAPK,
 		})
 
-		if _, err := findBaseMasterAPK(zr, 1<<20); err != nil {
+		if _, err := findBaseMasterAPK(zr, 1<<20, nil); err != nil {
 			t.Fatalf("findBaseMasterAPK(universal): %v", err)
 		}
 	})
@@ -242,7 +245,7 @@ func TestInspectAPKSAndNestedZip(t *testing.T) {
 			"base.apk": innerAPK,
 		})
 
-		if _, err := findNestedAPK(zr, []string{"missing.apk"}, 1<<20); err == nil {
+		if _, err := findNestedAPK(zr, []string{"missing.apk"}, 1<<20, nil); err == nil {
 			t.Fatal("findNestedAPK error = nil, want not found error")
 		}
 	})

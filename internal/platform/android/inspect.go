@@ -517,6 +517,22 @@ func detectImageFormat(path string) string {
 // It converts the binary XML format used in APK files into text XML
 // that can be decoded by encoding/xml.
 
+// maxStringPoolCount is the upper bound for string/style counts in a
+// resource string pool. Legitimate APKs rarely exceed 100 000 strings;
+// this cap prevents a crafted header from causing a multi-gigabyte
+// allocation.
+const maxStringPoolCount = 1 << 20 // ~1 million entries
+
+// maxTableEntryCount is the upper bound for entry counts in a resource
+// table type chunk. Same rationale as maxStringPoolCount.
+const maxTableEntryCount = 1 << 20
+
+// maxStringBytes is the upper bound for a single string's declared byte
+// length in the string pool. Legitimate resources rarely exceed a few
+// kilobytes per string; this cap prevents a crafted length field from
+// triggering a multi-gigabyte allocation.
+const maxStringBytes = 1 << 20 // 1 MiB
+
 type resChunkHeader struct {
 	Type       uint16
 	HeaderSize uint16
@@ -632,6 +648,13 @@ func readStringPool(sr *io.SectionReader) (*resStringPool, error) {
 		return nil, err
 	}
 
+	if hdr.StringCount > maxStringPoolCount {
+		return nil, fmt.Errorf("string pool: string count %d exceeds limit %d", hdr.StringCount, maxStringPoolCount)
+	}
+	if hdr.StyleCount > maxStringPoolCount {
+		return nil, fmt.Errorf("string pool: style count %d exceeds limit %d", hdr.StyleCount, maxStringPoolCount)
+	}
+
 	offsets := make([]uint32, hdr.StringCount)
 	if err := binary.Read(sr, binary.LittleEndian, offsets); err != nil {
 		return nil, err
@@ -677,6 +700,9 @@ func readUTF16String(r io.Reader) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if size*2 > maxStringBytes {
+		return "", fmt.Errorf("string pool: UTF-16 string length %d bytes exceeds limit %d", size*2, maxStringBytes)
+	}
 	buf := make([]uint16, size)
 	if err := binary.Read(r, binary.LittleEndian, buf); err != nil {
 		return "", err
@@ -711,6 +737,9 @@ func readUTF8String(r io.Reader) (string, error) {
 	size, err := readUTF8Len(r)
 	if err != nil {
 		return "", err
+	}
+	if size > maxStringBytes {
+		return "", fmt.Errorf("string pool: UTF-8 string length %d bytes exceeds limit %d", size, maxStringBytes)
 	}
 	buf := make([]byte, size)
 	if err := binary.Read(r, binary.LittleEndian, buf); err != nil {
@@ -1093,6 +1122,9 @@ func readTableType(sr *io.SectionReader, baseOffset int64, ch resChunkHeader) (*
 	// Read entry index array
 	// The area between headerSize and entriesStart contains the entry offsets
 	indexCount := hdr.EntryCount
+	if indexCount > maxTableEntryCount {
+		return nil, fmt.Errorf("table type: entry count %d exceeds limit %d", indexCount, maxTableEntryCount)
+	}
 	indexes := make([]uint32, indexCount)
 	if err := binary.Read(sr, binary.LittleEndian, indexes); err != nil {
 		return nil, err
