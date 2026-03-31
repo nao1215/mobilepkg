@@ -67,6 +67,7 @@ func OpenAllInnerAPKs(zr *zip.Reader, maxEntryBytes int64) ([]NamedZipReader, []
 	seen := make(map[string]struct{})
 	var readers []NamedZipReader
 	var diags []Diagnostic
+	attempted := 0
 	for _, f := range zr.File {
 		if !strings.HasSuffix(f.Name, ".apk") {
 			continue
@@ -75,7 +76,7 @@ func OpenAllInnerAPKs(zr *zip.Reader, maxEntryBytes int64) ([]NamedZipReader, []
 			continue
 		}
 		seen[f.Name] = struct{}{}
-		if len(readers) >= maxInnerAPKs {
+		if attempted >= maxInnerAPKs {
 			diags = append(diags, Diagnostic{
 				Code:     "dex.too_many_inner_apks",
 				Severity: "warn",
@@ -83,6 +84,7 @@ func OpenAllInnerAPKs(zr *zip.Reader, maxEntryBytes int64) ([]NamedZipReader, []
 			})
 			break
 		}
+		attempted++
 		inner, err := openNestedZip(zr, f.Name, maxEntryBytes)
 		if err != nil {
 			diags = append(diags, Diagnostic{
