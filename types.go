@@ -164,6 +164,12 @@ type report struct {
 	// Debuggable indicates whether the application is marked as debuggable.
 	// True for debug builds — a serious security issue in production.
 	Debuggable bool `json:"debuggable"`
+	// TestOnly indicates whether the application is marked as testOnly.
+	// True means the app can only be installed through adb.
+	TestOnly bool `json:"test_only"`
+	// ProfileableByShell indicates whether the application can be profiled
+	// from the shell without root.
+	ProfileableByShell bool `json:"profileable_by_shell"`
 	// AllowBackup indicates whether the application allows data backup.
 	// True by default on Android, which may expose user data.
 	AllowBackup bool `json:"allow_backup"`
@@ -240,6 +246,14 @@ type CertSummary struct {
 	SHA256Fingerprint string `json:"sha256_fingerprint"`
 	// SerialNumber is the certificate serial number in decimal.
 	SerialNumber string `json:"serial_number"`
+	// SignatureAlgorithm is the algorithm used to sign the certificate (e.g. "SHA256-RSA").
+	SignatureAlgorithm string `json:"signature_algorithm,omitempty"`
+	// PublicKeyAlgorithm is the public key algorithm (e.g. "RSA", "ECDSA").
+	PublicKeyAlgorithm string `json:"public_key_algorithm,omitempty"`
+	// KeySize is the public key size in bits (e.g. 2048, 4096).
+	KeySize int `json:"key_size,omitempty"`
+	// SelfSigned is true if the certificate subject matches the issuer.
+	SelfSigned bool `json:"self_signed,omitempty"`
 }
 
 // SDKConstraints holds the SDK and OS version requirements extracted
@@ -364,6 +378,11 @@ type InspectResult struct {
 
 	// Debuggable indicates whether the application is marked as debuggable.
 	Debuggable bool `json:"debuggable"`
+	// TestOnly indicates whether the application is marked as testOnly.
+	TestOnly bool `json:"test_only"`
+	// ProfileableByShell indicates whether the application can be profiled
+	// from the shell without root.
+	ProfileableByShell bool `json:"profileable_by_shell"`
 	// AllowBackup indicates whether the application allows data backup.
 	AllowBackup bool `json:"allow_backup"`
 	// UsesCleartextTraffic indicates whether the application allows
@@ -414,6 +433,12 @@ type ExportedComponent struct {
 	Authorities string `json:"authorities,omitempty"`
 	// IntentFilters holds parsed intent-filter data for the component.
 	IntentFilters []IntentFilter `json:"intent_filters,omitempty"`
+	// ReadPermission is the permission required to read from this provider.
+	ReadPermission string `json:"read_permission,omitempty"`
+	// WritePermission is the permission required to write to this provider.
+	WritePermission string `json:"write_permission,omitempty"`
+	// GrantURIPermissions indicates if URI permissions can be granted.
+	GrantURIPermissions bool `json:"grant_uri_permissions,omitempty"`
 }
 
 // IntentFilter holds parsed intent-filter data from an Android manifest.
@@ -456,6 +481,8 @@ type NetworkSecurityPolicy struct {
 	TrustAnchors []string `json:"trust_anchors,omitempty"`
 	// HasPinSet is true if any domain config includes certificate pinning.
 	HasPinSet bool `json:"has_pin_set"`
+	// HasDebugOverrides is true if debug-overrides section is present.
+	HasDebugOverrides bool `json:"has_debug_overrides,omitempty"`
 }
 
 // DomainConfig represents a <domain-config> entry in
@@ -468,6 +495,8 @@ type DomainConfig struct {
 	CleartextPermitted bool `json:"cleartext_permitted"`
 	// HasPinSet is true if this domain config includes certificate pinning.
 	HasPinSet bool `json:"has_pin_set"`
+	// NestedConfigs holds nested domain-config entries within this domain-config.
+	NestedConfigs []DomainConfig `json:"nested_configs,omitempty"`
 }
 
 // NetworkEndpoint represents a network endpoint found in the package metadata.

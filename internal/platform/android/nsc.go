@@ -14,20 +14,23 @@ type NetworkSecurityPolicy struct {
 	DomainConfigs      []DomainConfig `json:"domain_configs,omitempty"`
 	TrustAnchors       []string       `json:"trust_anchors,omitempty"`
 	HasPinSet          bool           `json:"has_pin_set"`
+	HasDebugOverrides  bool           `json:"has_debug_overrides"`
 }
 
 // DomainConfig represents a <domain-config> entry in network_security_config.xml.
 type DomainConfig struct {
-	Domains            []string `json:"domains"`
-	CleartextPermitted bool     `json:"cleartext_permitted"`
-	HasPinSet          bool     `json:"has_pin_set"`
+	Domains            []string       `json:"domains"`
+	CleartextPermitted bool           `json:"cleartext_permitted"`
+	HasPinSet          bool           `json:"has_pin_set"`
+	NestedConfigs      []DomainConfig `json:"nested_configs,omitempty"`
 }
 
 // nscRoot is the XML root element of network_security_config.xml.
 type nscRoot struct {
-	XMLName       xml.Name          `xml:"network-security-config"`
-	BaseConfig    *nscBaseConfig    `xml:"base-config"`
-	DomainConfigs []nscDomainConfig `xml:"domain-config"`
+	XMLName        xml.Name           `xml:"network-security-config"`
+	BaseConfig     *nscBaseConfig     `xml:"base-config"`
+	DomainConfigs  []nscDomainConfig  `xml:"domain-config"`
+	DebugOverrides *nscDebugOverrides `xml:"debug-overrides"`
 }
 
 type nscBaseConfig struct {
@@ -35,11 +38,16 @@ type nscBaseConfig struct {
 	TrustAnchors     *nscTrustAnchors `xml:"trust-anchors"`
 }
 
+type nscDebugOverrides struct {
+	TrustAnchors *nscTrustAnchors `xml:"trust-anchors"`
+}
+
 type nscDomainConfig struct {
-	CleartextTraffic string           `xml:"cleartextTrafficPermitted,attr"`
-	Domains          []nscDomain      `xml:"domain"`
-	PinSet           *nscPinSet       `xml:"pin-set"`
-	TrustAnchors     *nscTrustAnchors `xml:"trust-anchors"`
+	CleartextTraffic string            `xml:"cleartextTrafficPermitted,attr"`
+	Domains          []nscDomain       `xml:"domain"`
+	PinSet           *nscPinSet        `xml:"pin-set"`
+	TrustAnchors     *nscTrustAnchors  `xml:"trust-anchors"`
+	NestedConfigs    []nscDomainConfig `xml:"domain-config"`
 }
 
 type nscDomain struct {
@@ -110,22 +118,43 @@ func parseNetworkSecurityConfig(zr *zip.Reader, configRef string, maxBytes int64
 		}
 	}
 
-	// Domain configs.
+	// Domain configs (with recursive nested support).
 	for _, dc := range root.DomainConfigs {
-		domainCfg := DomainConfig{
-			CleartextPermitted: strings.EqualFold(dc.CleartextTraffic, "true"),
-			HasPinSet:          dc.PinSet != nil && len(dc.PinSet.Pins) > 0,
-		}
-		for _, d := range dc.Domains {
-			domainCfg.Domains = append(domainCfg.Domains, strings.TrimSpace(d.Value))
-		}
-		if domainCfg.HasPinSet {
-			policy.HasPinSet = true
-		}
+		domainCfg := convertDomainConfig(dc, policy)
 		policy.DomainConfigs = append(policy.DomainConfigs, domainCfg)
 	}
 
+	// Debug overrides.
+	if root.DebugOverrides != nil {
+		policy.HasDebugOverrides = true
+		if root.DebugOverrides.TrustAnchors != nil {
+			for _, cert := range root.DebugOverrides.TrustAnchors.Certificates {
+				policy.TrustAnchors = append(policy.TrustAnchors, "debug-overrides:"+cert.Src)
+			}
+		}
+	}
+
 	return policy
+}
+
+// convertDomainConfig recursively converts an nscDomainConfig (XML) into a
+// DomainConfig, including any nested domain-config elements. It also updates
+// the policy's HasPinSet flag as a side effect.
+func convertDomainConfig(dc nscDomainConfig, policy *NetworkSecurityPolicy) DomainConfig {
+	domainCfg := DomainConfig{
+		CleartextPermitted: strings.EqualFold(dc.CleartextTraffic, "true"),
+		HasPinSet:          dc.PinSet != nil && len(dc.PinSet.Pins) > 0,
+	}
+	for _, d := range dc.Domains {
+		domainCfg.Domains = append(domainCfg.Domains, strings.TrimSpace(d.Value))
+	}
+	if domainCfg.HasPinSet {
+		policy.HasPinSet = true
+	}
+	for _, nested := range dc.NestedConfigs {
+		domainCfg.NestedConfigs = append(domainCfg.NestedConfigs, convertDomainConfig(nested, policy))
+	}
+	return domainCfg
 }
 
 // resolveNSCPath resolves the networkSecurityConfig attribute value to a

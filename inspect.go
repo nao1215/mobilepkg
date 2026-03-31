@@ -103,6 +103,8 @@ func inspectResultToReport(ir *InspectResult) report {
 		SDK:                   ir.SDK,
 		Signing:               ir.Signing,
 		Debuggable:            ir.Debuggable,
+		TestOnly:              ir.TestOnly,
+		ProfileableByShell:    ir.ProfileableByShell,
 		AllowBackup:           ir.AllowBackup,
 		UsesCleartextTraffic:  ir.UsesCleartextTraffic,
 		NetworkSecurityConfig: ir.NetworkSecurityConfig,
@@ -148,6 +150,8 @@ func buildInspectResult(rpt report, analysis analysisResult) *InspectResult {
 		Signing:               rpt.Signing,
 		Icon:                  rpt.Icon,
 		Debuggable:            rpt.Debuggable,
+		TestOnly:              rpt.TestOnly,
+		ProfileableByShell:    rpt.ProfileableByShell,
 		AllowBackup:           rpt.AllowBackup,
 		UsesCleartextTraffic:  rpt.UsesCleartextTraffic,
 		NetworkSecurityConfig: rpt.NetworkSecurityConfig,
@@ -373,6 +377,8 @@ func buildAndroidReport(result *android.Result, diags []android.Diagnostic, sect
 	}
 
 	rpt.Debuggable = result.Debuggable
+	rpt.TestOnly = result.TestOnly
+	rpt.ProfileableByShell = result.ProfileableByShell
 	rpt.AllowBackup = result.AllowBackup
 	rpt.UsesCleartextTraffic = result.UsesCleartextTraffic
 	rpt.NetworkSecurityConfig = result.NetworkSecurityConfig
@@ -381,23 +387,23 @@ func buildAndroidReport(result *android.Result, diags []android.Diagnostic, sect
 			CleartextPermitted: result.NSCPolicy.CleartextPermitted,
 			HasPinSet:          result.NSCPolicy.HasPinSet,
 			TrustAnchors:       result.NSCPolicy.TrustAnchors,
+			HasDebugOverrides:  result.NSCPolicy.HasDebugOverrides,
 		}
 		for _, dc := range result.NSCPolicy.DomainConfigs {
-			rpt.NSCPolicy.DomainConfigs = append(rpt.NSCPolicy.DomainConfigs, DomainConfig{
-				Domains:            dc.Domains,
-				CleartextPermitted: dc.CleartextPermitted,
-				HasPinSet:          dc.HasPinSet,
-			})
+			rpt.NSCPolicy.DomainConfigs = append(rpt.NSCPolicy.DomainConfigs, convertNSCDomainConfig(dc))
 		}
 	}
 
 	for _, ec := range result.ExportedComponents {
 		comp := ExportedComponent{
-			Kind:        ec.Kind,
-			Name:        ec.Name,
-			Exported:    ec.Exported,
-			Permission:  ec.Permission,
-			Authorities: ec.Authorities,
+			Kind:                ec.Kind,
+			Name:                ec.Name,
+			Exported:            ec.Exported,
+			Permission:          ec.Permission,
+			Authorities:         ec.Authorities,
+			ReadPermission:      ec.ReadPermission,
+			WritePermission:     ec.WritePermission,
+			GrantURIPermissions: ec.GrantURIPermissions == "true",
 		}
 		for _, f := range ec.IntentFilters {
 			filter := IntentFilter{
@@ -437,12 +443,16 @@ func buildAndroidReport(result *android.Result, diags []android.Diagnostic, sect
 		si := &SigningInfo{Scheme: result.Signing.Scheme}
 		for _, c := range result.Signing.Certs {
 			si.Certificates = append(si.Certificates, CertSummary{
-				Subject:           c.Subject,
-				Issuer:            c.Issuer,
-				NotBefore:         c.NotBefore,
-				NotAfter:          c.NotAfter,
-				SHA256Fingerprint: c.SHA256Fingerprint,
-				SerialNumber:      c.SerialNumber,
+				Subject:            c.Subject,
+				Issuer:             c.Issuer,
+				NotBefore:          c.NotBefore,
+				NotAfter:           c.NotAfter,
+				SHA256Fingerprint:  c.SHA256Fingerprint,
+				SerialNumber:       c.SerialNumber,
+				SignatureAlgorithm: c.SignatureAlgorithm,
+				PublicKeyAlgorithm: c.PublicKeyAlgorithm,
+				KeySize:            c.KeySize,
+				SelfSigned:         c.SelfSigned,
 			})
 		}
 		rpt.Signing = si
@@ -561,12 +571,16 @@ func inspectIOS(zr *zip.Reader, sections section, maxEntryBytes int64) (report, 
 		si := &SigningInfo{Scheme: "apple"}
 		for _, c := range result.Signing.Certs {
 			si.Certificates = append(si.Certificates, CertSummary{
-				Subject:           c.Subject,
-				Issuer:            c.Issuer,
-				NotBefore:         c.NotBefore,
-				NotAfter:          c.NotAfter,
-				SHA256Fingerprint: c.SHA256Fingerprint,
-				SerialNumber:      c.SerialNumber,
+				Subject:            c.Subject,
+				Issuer:             c.Issuer,
+				NotBefore:          c.NotBefore,
+				NotAfter:           c.NotAfter,
+				SHA256Fingerprint:  c.SHA256Fingerprint,
+				SerialNumber:       c.SerialNumber,
+				SignatureAlgorithm: c.SignatureAlgorithm,
+				PublicKeyAlgorithm: c.PublicKeyAlgorithm,
+				KeySize:            c.KeySize,
+				SelfSigned:         c.SelfSigned,
 			})
 		}
 		rpt.Signing = si
@@ -596,6 +610,20 @@ func inspectIOS(zr *zip.Reader, sections section, maxEntryBytes int64) (report, 
 	}
 
 	return rpt, nil
+}
+
+// convertNSCDomainConfig recursively converts an android.DomainConfig to a
+// mobilepkg.DomainConfig, including nested domain-config entries.
+func convertNSCDomainConfig(dc android.DomainConfig) DomainConfig {
+	out := DomainConfig{
+		Domains:            dc.Domains,
+		CleartextPermitted: dc.CleartextPermitted,
+		HasPinSet:          dc.HasPinSet,
+	}
+	for _, nested := range dc.NestedConfigs {
+		out.NestedConfigs = append(out.NestedConfigs, convertNSCDomainConfig(nested))
+	}
+	return out
 }
 
 // sortReport sorts the variable-length slices in a report for stable output.
