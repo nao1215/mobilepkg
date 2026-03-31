@@ -38,21 +38,36 @@ func InspectXAPK(zr *zip.Reader, sections uint64, maxEntryBytes int64, validate 
 	}
 
 	// Try to find and open the base APK for deeper inspection.
-	baseZR, baseErr := findXAPKBaseAPK(zr, xm, maxEntryBytes, validate)
+	candidates := xapkBaseAPKCandidates(zr, xm)
+	baseZR, baseErr := findNestedAPK(zr, candidates, maxEntryBytes, validate)
+
+	var fallbackDiags []Diagnostic
 	if baseErr == nil {
 		innerResult, innerDiags, innerErr := Inspect(baseZR, sections, nil, 0, maxEntryBytes)
 		if innerErr == nil {
 			mergeXAPKMetadata(innerResult, xm, sections)
 			return innerResult, innerDiags, nil
 		}
+		fallbackDiags = append(fallbackDiags, Diagnostic{
+			Code:     "xapk.base_apk_parse_failed",
+			Severity: "error",
+			Message:  fmt.Sprintf("base APK found but failed to parse: %v; falling back to manifest.json metadata only", innerErr),
+		})
+	} else if len(candidates) > 0 {
+		fallbackDiags = append(fallbackDiags, Diagnostic{
+			Code:     "xapk.base_apk_all_candidates_failed",
+			Severity: "error",
+			Message:  fmt.Sprintf("all %d base APK candidate(s) failed to open or validate: %v; falling back to manifest.json metadata only", len(candidates), baseErr),
+		})
 	}
 
 	// Fallback: extract what we can from manifest.json alone.
-	return resultFromXAPKManifest(xm, sections), nil, nil
+	return resultFromXAPKManifest(xm, sections), fallbackDiags, nil
 }
 
-// findXAPKBaseAPK locates the base APK inside an XAPK archive.
-func findXAPKBaseAPK(zr *zip.Reader, xm xapkManifest, maxEntryBytes int64, validate InnerArchiveValidator) (*zip.Reader, error) {
+// xapkBaseAPKCandidates returns the ordered list of candidate entry names
+// for the base APK inside an XAPK archive.
+func xapkBaseAPKCandidates(zr *zip.Reader, xm xapkManifest) []string {
 	var candidates []string
 
 	// v2: look at split_apks for the base entry
@@ -75,7 +90,7 @@ func findXAPKBaseAPK(zr *zip.Reader, xm xapkManifest, maxEntryBytes int64, valid
 		}
 	}
 
-	return findNestedAPK(zr, candidates, maxEntryBytes, validate)
+	return candidates
 }
 
 // mergeXAPKMetadata fills in any fields that the base APK inspection

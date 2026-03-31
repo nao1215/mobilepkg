@@ -137,8 +137,11 @@ func TestInspectXAPK_FallbackAndMerge(t *testing.T) {
 	if err != nil {
 		t.Fatalf("InspectXAPK: %v", err)
 	}
-	if len(diags) != 0 {
-		t.Fatalf("diags = %#v, want none", diags)
+	// The inner APK in this test has a plain-text manifest (not binary XML),
+	// so parsing fails and we fall back to manifest.json. The fallback now
+	// emits a diagnostic instead of silently succeeding.
+	if len(diags) != 1 || diags[0].Code != "xapk.base_apk_parse_failed" {
+		t.Fatalf("diags = %#v, want single xapk.base_apk_parse_failed diagnostic", diags)
 	}
 	if result.PackageName != "com.example.xapk" || result.Label != "XAPK Test App" {
 		t.Fatalf("identity = %q/%q", result.PackageName, result.Label)
