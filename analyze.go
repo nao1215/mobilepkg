@@ -210,7 +210,9 @@ func analyzeExportedComponents(components []ExportedComponent) []Finding {
 				Field:             fmt.Sprintf("%s[@name]", ec.Kind),
 				MatchedTextMasked: ec.Name,
 			}},
-			Fingerprint: fingerprint("exported", ec.Kind, ec.Name),
+			// Include protection state in fingerprint so that a component
+			// losing its permission appears as a changed finding in baseline diff.
+			Fingerprint: fingerprint("exported", ec.Kind, ec.Name, ec.Permission, ec.ReadPermission, ec.WritePermission),
 		})
 	}
 	return findings
