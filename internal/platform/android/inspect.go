@@ -527,6 +527,12 @@ const maxStringPoolCount = 1 << 20 // ~1 million entries
 // table type chunk. Same rationale as maxStringPoolCount.
 const maxTableEntryCount = 1 << 20
 
+// maxStringBytes is the upper bound for a single string's declared byte
+// length in the string pool. Legitimate resources rarely exceed a few
+// kilobytes per string; this cap prevents a crafted length field from
+// triggering a multi-gigabyte allocation.
+const maxStringBytes = 1 << 20 // 1 MiB
+
 type resChunkHeader struct {
 	Type       uint16
 	HeaderSize uint16
@@ -694,6 +700,9 @@ func readUTF16String(r io.Reader) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if size*2 > maxStringBytes {
+		return "", fmt.Errorf("string pool: UTF-16 string length %d bytes exceeds limit %d", size*2, maxStringBytes)
+	}
 	buf := make([]uint16, size)
 	if err := binary.Read(r, binary.LittleEndian, buf); err != nil {
 		return "", err
@@ -728,6 +737,9 @@ func readUTF8String(r io.Reader) (string, error) {
 	size, err := readUTF8Len(r)
 	if err != nil {
 		return "", err
+	}
+	if size > maxStringBytes {
+		return "", fmt.Errorf("string pool: UTF-8 string length %d bytes exceeds limit %d", size, maxStringBytes)
 	}
 	buf := make([]byte, size)
 	if err := binary.Read(r, binary.LittleEndian, buf); err != nil {
