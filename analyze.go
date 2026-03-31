@@ -61,7 +61,10 @@ func analyzeReport(rpt report, opts analyzeOptions) analysisResult {
 		return result.findings[i].ID < result.findings[j].ID
 	})
 	sort.Slice(result.secretCandidates, func(i, j int) bool {
-		return result.secretCandidates[i].SHA256 < result.secretCandidates[j].SHA256
+		if result.secretCandidates[i].Kind != result.secretCandidates[j].Kind {
+			return result.secretCandidates[i].Kind < result.secretCandidates[j].Kind
+		}
+		return result.secretCandidates[i].Source < result.secretCandidates[j].Source
 	})
 
 	return result
@@ -439,7 +442,6 @@ func scanSecretsInStrings(kvPairs map[string]string, source string) []SecretCand
 				candidates = append(candidates, SecretCandidate{
 					Kind:        sp.kind,
 					MaskedValue: maskSecret(value),
-					SHA256:      fmt.Sprintf("%x", sha256.Sum256([]byte(value))),
 					Source:      source,
 					Confidence:  sp.confidence,
 				})
@@ -482,8 +484,8 @@ func maskSecret(value string) string {
 	if visible < 2 {
 		visible = 2
 	}
-	if visible > 8 {
-		visible = 8
+	if visible > 3 {
+		visible = 3
 	}
 	return value[:visible] + strings.Repeat("*", len(value)-visible)
 }

@@ -32,7 +32,6 @@ func TestSecretCandidate_Fields(t *testing.T) {
 	sc := mobilepkg.SecretCandidate{
 		Kind:        "api_key",
 		MaskedValue: "AKIA****",
-		SHA256:      "abc123",
 		Source:      "manifest",
 		Confidence:  mobilepkg.ConfidenceHigh,
 	}

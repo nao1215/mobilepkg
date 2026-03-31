@@ -172,15 +172,15 @@ func TestScanSecretsMaskingAndFlatten(t *testing.T) {
 	if len(candidates) != 1 {
 		t.Fatalf("scanSecretsInMap = %#v, want 1 candidate", candidates)
 	}
-	if candidates[0].MaskedValue == "" || candidates[0].SHA256 == "" {
-		t.Fatalf("candidate = %#v, want masked value and hash", candidates[0])
+	if candidates[0].MaskedValue == "" {
+		t.Fatalf("candidate = %#v, want masked value", candidates[0])
 	}
 
 	if got := maskSecret("abcd"); got != "****" {
 		t.Fatalf("maskSecret(short) = %q, want %q", got, "****")
 	}
-	if got := maskSecret("abcdefghijklmnopqrstuvwxyz"); !strings.HasPrefix(got, "abcdef") || !strings.Contains(got, "*") {
-		t.Fatalf("maskSecret(long) = %q, want prefix preserved and masked tail", got)
+	if got := maskSecret("abcdefghijklmnopqrstuvwxyz"); !strings.HasPrefix(got, "abc") || !strings.Contains(got, "*") {
+		t.Fatalf("maskSecret(long) = %q, want short prefix preserved and masked tail", got)
 	}
 }
 

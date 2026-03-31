@@ -488,15 +488,13 @@ type NetworkEndpoint struct {
 }
 
 // SecretCandidate represents a potential secret, token, or credential
-// found in the package. Raw values are never exposed; only masked values
-// and SHA-256 hashes are provided.
+// found in the package. Raw values are never exposed; only a short
+// masked prefix is provided for human identification.
 type SecretCandidate struct {
 	// Kind classifies the secret type (e.g. "api_key", "token", "aws_key").
 	Kind string `json:"kind"`
-	// MaskedValue shows the secret with sensitive parts redacted.
+	// MaskedValue shows a short prefix of the secret with the rest redacted.
 	MaskedValue string `json:"masked_value"`
-	// SHA256 is the hex-encoded SHA-256 hash of the raw value.
-	SHA256 string `json:"sha256"`
 	// Source describes where this candidate was found.
 	Source string `json:"source"`
 	// Confidence indicates how certain the detection is.
