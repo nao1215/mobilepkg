@@ -26,17 +26,20 @@ func openNestedZip(zr *zip.Reader, name string, maxBytes int64) (*zip.Reader, er
 // findNestedAPK searches for the first APK file matching any of the given
 // candidate names and returns a *zip.Reader for it. If validate is
 // non-nil, it is called on the inner archive before returning it.
+// Candidates that fail to open or fail validation are skipped so that
+// subsequent candidates still get a chance.
 func findNestedAPK(zr *zip.Reader, candidates []string, maxBytes int64, validate InnerArchiveValidator) (*zip.Reader, error) {
 	for _, name := range candidates {
 		inner, err := openNestedZip(zr, name, maxBytes)
-		if err == nil {
-			if validate != nil {
-				if vErr := validate(inner); vErr != nil {
-					return nil, fmt.Errorf("nested zip %q: validation failed: %w", name, vErr)
-				}
-			}
-			return inner, nil
+		if err != nil {
+			continue
 		}
+		if validate != nil {
+			if vErr := validate(inner); vErr != nil {
+				continue
+			}
+		}
+		return inner, nil
 	}
 	return nil, fmt.Errorf("no APK found among candidates: %s", strings.Join(candidates, ", "))
 }
