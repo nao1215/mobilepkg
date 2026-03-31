@@ -1,6 +1,8 @@
 package mobilepkg
 
 import (
+	"archive/zip"
+	"bytes"
 	"strings"
 	"testing"
 	"time"
@@ -14,26 +16,32 @@ import (
 func TestSecretID_NoRawPrefix(t *testing.T) {
 	t.Parallel()
 
-	// Ensure that secret finding IDs from DEX scanning do not contain
-	// raw secret prefixes — they should use hash-based IDs.
-	rpt := report{
-		Platform: PlatformAndroid,
-		PlatformData: &androidReport{
-			RawManifest: map[string]any{
-				"key": "AKIAIOSFODNN7EXAMPLE",
-			},
-		},
-	}
-	result := analyzeReport(rpt, analyzeOptions{})
-	for _, f := range result.findings {
+	// Build a minimal DEX containing an AWS key string, package it in a ZIP,
+	// and run analyzeDex to verify the finding ID does not leak the raw key.
+	dexData := buildMinimalTestDEX(t, []string{"AKIAIOSFODNN7EXAMPLE"})
+	buf := createZipWithFiles(t, map[string][]byte{
+		"classes.dex": dexData,
+	})
+	zr, err := zip.NewReader(bytes.NewReader(buf), int64(len(buf)))
+	require.NoError(t, err)
+
+	findings, _ := analyzeDex([]namedReader{{reader: zr}}, FormatAPK, 512<<20)
+	require.NotEmpty(t, findings, "expected at least one finding from DEX secret scan")
+
+	var found bool
+	for _, f := range findings {
 		if f.Category == "dex_secret" {
+			found = true
 			assert.NotContains(t, f.ID, "AKIA",
 				"finding ID should not contain raw secret prefix")
+			assert.True(t, strings.HasPrefix(f.ID, "dex.secret.aws_key."),
+				"finding ID should start with dex.secret.aws_key., got: %s", f.ID)
 		}
 	}
+	assert.True(t, found, "should have at least one dex_secret finding")
 }
 
-func TestFlattenMap_ArraysTraversed(t *testing.T) {
+func TestWalkStringLeaves_ArraysTraversed(t *testing.T) {
 	t.Parallel()
 
 	m := map[string]any{
@@ -45,12 +53,15 @@ func TestFlattenMap_ArraysTraversed(t *testing.T) {
 		},
 	}
 
-	flat := flattenMap(m, "")
+	flat := make(map[string]string)
+	walkStringLeaves(m, "", func(key, value string) {
+		flat[key] = value
+	})
 	assert.Contains(t, flat, "items[0]")
 	assert.Contains(t, flat, "items[1].nested_token")
 }
 
-func TestFlattenMap_TypedStringSlice(t *testing.T) {
+func TestWalkStringLeaves_TypedStringSlice(t *testing.T) {
 	t.Parallel()
 
 	// Android raw manifest stores permission arrays as []string, not []any.
@@ -61,7 +72,10 @@ func TestFlattenMap_TypedStringSlice(t *testing.T) {
 		},
 	}
 
-	flat := flattenMap(m, "")
+	flat := make(map[string]string)
+	walkStringLeaves(m, "", func(key, value string) {
+		flat[key] = value
+	})
 	assert.Contains(t, flat, "permissions[0]")
 	assert.Equal(t, "android.permission.INTERNET", flat["permissions[0]"])
 	assert.Contains(t, flat, "permissions[1]")

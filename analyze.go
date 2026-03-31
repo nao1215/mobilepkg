@@ -159,7 +159,38 @@ func analyzeManifestSecurity(r report) []Finding {
 	return findings
 }
 
-// analyzeExportedComponents generates findings for exported components.
+// componentRiskResult holds the assessed risk for an exported component.
+type componentRiskResult struct {
+	severity  Severity
+	browsable bool
+	protected bool
+}
+
+// assessComponentRisk determines the risk level of an exported component.
+func assessComponentRisk(ec ExportedComponent) componentRiskResult {
+	hasProtection := ec.Permission != "" || ec.ReadPermission != "" || ec.WritePermission != ""
+	isBrowsable := componentIsBrowsable(ec)
+	isProvider := ec.Kind == "provider"
+
+	severity := SeverityInfo
+	switch {
+	case isProvider && !hasProtection:
+		severity = SeverityError
+	case isProvider:
+		severity = SeverityWarn
+	case !hasProtection && (ec.Kind == "service" || ec.Kind == "receiver"):
+		severity = SeverityWarn
+	case !hasProtection && ec.Kind == "activity" && isBrowsable:
+		severity = SeverityWarn
+	}
+
+	return componentRiskResult{
+		severity:  severity,
+		browsable: isBrowsable,
+		protected: hasProtection,
+	}
+}
+
 func analyzeExportedComponents(components []ExportedComponent) []Finding {
 	var findings []Finding
 	for _, ec := range components {
@@ -167,43 +198,28 @@ func analyzeExportedComponents(components []ExportedComponent) []Finding {
 			continue
 		}
 
-		// Determine severity based on component type and protection.
-		severity := SeverityInfo
-		hasProtection := ec.Permission != "" || ec.ReadPermission != "" || ec.WritePermission != ""
-		isBrowsable := componentIsBrowsable(ec)
-		isProvider := ec.Kind == "provider"
-
-		switch {
-		case isProvider && !hasProtection:
-			severity = SeverityError
-		case isProvider:
-			severity = SeverityWarn
-		case !hasProtection && (ec.Kind == "service" || ec.Kind == "receiver"):
-			severity = SeverityWarn
-		case !hasProtection && ec.Kind == "activity" && isBrowsable:
-			severity = SeverityWarn
-		}
+		risk := assessComponentRisk(ec)
 
 		msg := fmt.Sprintf("exported %s: %s", ec.Kind, ec.Name)
 		if ec.Permission != "" {
 			msg += fmt.Sprintf(" (requires %s)", ec.Permission)
-		} else if !hasProtection {
+		} else if !risk.protected {
 			msg += " (no permission required)"
 		}
-		if isBrowsable {
+		if risk.browsable {
 			msg += " [browsable]"
 		}
 		if ec.Authorities != "" {
 			msg += fmt.Sprintf(" [authorities: %s]", ec.Authorities)
 		}
-		if isProvider && ec.GrantURIPermissions {
+		if ec.Kind == "provider" && ec.GrantURIPermissions {
 			msg += " [grantUriPermissions]"
 		}
 
 		findings = append(findings, Finding{
 			ID:         fmt.Sprintf("exported.%s.%s", ec.Kind, sanitizeFindingID(ec.Name)),
 			Category:   "exported_component",
-			Severity:   severity,
+			Severity:   risk.severity,
 			Confidence: ConfidenceHigh,
 			Message:    msg,
 			Evidence: []Evidence{{
@@ -211,9 +227,11 @@ func analyzeExportedComponents(components []ExportedComponent) []Finding {
 				Field:             fmt.Sprintf("%s[@name]", ec.Kind),
 				MatchedTextMasked: ec.Name,
 			}},
-			// Include protection state in fingerprint so that a component
-			// losing its permission appears as a changed finding in baseline diff.
-			Fingerprint: fingerprint("exported", ec.Kind, ec.Name, ec.Permission, ec.ReadPermission, ec.WritePermission),
+			Fingerprint: fingerprint("exported", ec.Kind, ec.Name,
+				ec.Permission, ec.ReadPermission, ec.WritePermission,
+				ec.Authorities,
+				fmt.Sprintf("%v", risk.browsable),
+				fmt.Sprintf("%v", ec.GrantURIPermissions)),
 		})
 	}
 	return findings
@@ -231,6 +249,19 @@ func componentIsBrowsable(ec ExportedComponent) bool {
 	return false
 }
 
+// signingFinding builds a Finding with the "signing" category.
+func signingFinding(id string, sev Severity, conf Confidence, msg, field, masked string, fpParts ...string) Finding {
+	return Finding{
+		ID:          id,
+		Category:    "signing",
+		Severity:    sev,
+		Confidence:  conf,
+		Message:     msg,
+		Evidence:    []Evidence{{Field: field, MatchedTextMasked: masked}},
+		Fingerprint: fingerprint(fpParts...),
+	}
+}
+
 // analyzeSigningInfo generates findings from signing certificate information.
 func analyzeSigningInfo(signing *SigningInfo) []Finding {
 	if signing == nil {
@@ -242,101 +273,66 @@ func analyzeSigningInfo(signing *SigningInfo) []Finding {
 
 	// V1-only signing is weak — it does not protect against APK modifications.
 	if signing.Scheme == "v1" {
-		findings = append(findings, Finding{
-			ID:         "signing.v1_only",
-			Category:   "signing",
-			Severity:   SeverityWarn,
-			Confidence: ConfidenceHigh,
-			Message:    "APK uses v1 (JAR) signing only — vulnerable to modification without invalidating signature",
-			Evidence: []Evidence{{
-				Field:             "signing.scheme",
-				MatchedTextMasked: signing.Scheme,
-			}},
-			Fingerprint: fingerprint("signing.v1_only"),
-		})
+		findings = append(findings, signingFinding(
+			"signing.v1_only", SeverityWarn, ConfidenceHigh,
+			"APK uses v1 (JAR) signing only — vulnerable to modification without invalidating signature",
+			"signing.scheme", signing.Scheme,
+			"signing.v1_only",
+		))
 	}
 
 	for _, cert := range signing.Certificates {
 		// Detect debug/self-signed certificates.
 		if isDebugCert(cert) {
-			findings = append(findings, Finding{
-				ID:         "signing.debug_cert",
-				Category:   "signing",
-				Severity:   SeverityError,
-				Confidence: ConfidenceHigh,
-				Message:    fmt.Sprintf("signed with debug certificate (subject: %s) — not suitable for production", cert.Subject),
-				Evidence: []Evidence{{
-					Field:             "certificate.subject",
-					MatchedTextMasked: cert.Subject,
-				}},
-				Fingerprint: fingerprint("signing.debug", cert.SHA256Fingerprint),
-			})
+			findings = append(findings, signingFinding(
+				"signing.debug_cert", SeverityError, ConfidenceHigh,
+				fmt.Sprintf("signed with debug certificate (subject: %s) — not suitable for production", cert.Subject),
+				"certificate.subject", cert.Subject,
+				"signing.debug", cert.SHA256Fingerprint,
+			))
 		}
 
 		// Detect self-signed test certificates (not debug but still self-signed).
 		if cert.SelfSigned && !isDebugCert(cert) {
-			findings = append(findings, Finding{
-				ID:         "signing.self_signed_test_cert",
-				Category:   "signing",
-				Severity:   SeverityWarn,
-				Confidence: ConfidenceMedium,
-				Message:    fmt.Sprintf("self-signed certificate (subject: %s) — may indicate a test build", cert.Subject),
-				Evidence: []Evidence{{
-					Field:             "certificate.subject",
-					MatchedTextMasked: cert.Subject,
-				}},
-				Fingerprint: fingerprint("signing.self_signed", cert.SHA256Fingerprint),
-			})
+			findings = append(findings, signingFinding(
+				"signing.self_signed_test_cert", SeverityWarn, ConfidenceMedium,
+				fmt.Sprintf("self-signed certificate (subject: %s) — may indicate a test build", cert.Subject),
+				"certificate.subject", cert.Subject,
+				"signing.self_signed", cert.SHA256Fingerprint,
+			))
 		}
 
 		// Detect weak signature digest algorithms.
 		if isWeakDigest(cert.SignatureAlgorithm) {
-			findings = append(findings, Finding{
-				ID:         "signing.weak_digest",
-				Category:   "signing",
-				Severity:   SeverityWarn,
-				Confidence: ConfidenceHigh,
-				Message:    fmt.Sprintf("certificate uses weak signature algorithm: %s", cert.SignatureAlgorithm),
-				Evidence: []Evidence{{
-					Field:             "certificate.signature_algorithm",
-					MatchedTextMasked: cert.SignatureAlgorithm,
-				}},
-				Fingerprint: fingerprint("signing.weak_digest", cert.SHA256Fingerprint),
-			})
+			findings = append(findings, signingFinding(
+				"signing.weak_digest", SeverityWarn, ConfidenceHigh,
+				fmt.Sprintf("certificate uses weak signature algorithm: %s", cert.SignatureAlgorithm),
+				"certificate.signature_algorithm", cert.SignatureAlgorithm,
+				"signing.weak_digest", cert.SHA256Fingerprint,
+			))
 		}
 
 		// Detect weak key sizes.
 		if isWeakKeySize(cert.PublicKeyAlgorithm, cert.KeySize) {
-			findings = append(findings, Finding{
-				ID:         "signing.weak_key_size",
-				Category:   "signing",
-				Severity:   SeverityWarn,
-				Confidence: ConfidenceHigh,
-				Message:    fmt.Sprintf("certificate uses weak key: %s %d-bit", cert.PublicKeyAlgorithm, cert.KeySize),
-				Evidence: []Evidence{{
-					Field:             "certificate.key_size",
-					MatchedTextMasked: fmt.Sprintf("%s %d", cert.PublicKeyAlgorithm, cert.KeySize),
-				}},
-				Fingerprint: fingerprint("signing.weak_key", cert.SHA256Fingerprint),
-			})
+			findings = append(findings, signingFinding(
+				"signing.weak_key_size", SeverityWarn, ConfidenceHigh,
+				fmt.Sprintf("certificate uses weak key: %s %d-bit", cert.PublicKeyAlgorithm, cert.KeySize),
+				"certificate.key_size", fmt.Sprintf("%s %d", cert.PublicKeyAlgorithm, cert.KeySize),
+				"signing.weak_key", cert.SHA256Fingerprint,
+			))
 		}
 
 		// Detect expired certificates.
 		if cert.NotAfter != "" {
 			expiry, err := time.Parse(time.RFC3339, cert.NotAfter)
 			if err == nil && now.After(expiry) {
-				findings = append(findings, Finding{
-					ID:         fmt.Sprintf("signing.expired.%s", sanitizeFindingID(cert.SHA256Fingerprint)),
-					Category:   "signing",
-					Severity:   SeverityWarn,
-					Confidence: ConfidenceHigh,
-					Message:    fmt.Sprintf("signing certificate expired: %s (subject: %s)", cert.NotAfter, cert.Subject),
-					Evidence: []Evidence{{
-						Field:             "certificate.not_after",
-						MatchedTextMasked: cert.NotAfter,
-					}},
-					Fingerprint: fingerprint("signing.expired", cert.SHA256Fingerprint),
-				})
+				findings = append(findings, signingFinding(
+					fmt.Sprintf("signing.expired.%s", sanitizeFindingID(cert.SHA256Fingerprint)),
+					SeverityWarn, ConfidenceHigh,
+					fmt.Sprintf("signing certificate expired: %s (subject: %s)", cert.NotAfter, cert.Subject),
+					"certificate.not_after", cert.NotAfter,
+					"signing.expired", cert.SHA256Fingerprint,
+				))
 			}
 		}
 	}
@@ -345,18 +341,12 @@ func analyzeSigningInfo(signing *SigningInfo) []Finding {
 	if signing.ProvisioningExpiresAt != "" {
 		expiry, err := time.Parse(time.RFC3339, signing.ProvisioningExpiresAt)
 		if err == nil && now.After(expiry) {
-			findings = append(findings, Finding{
-				ID:         "signing.provisioning_expired",
-				Category:   "signing",
-				Severity:   SeverityWarn,
-				Confidence: ConfidenceHigh,
-				Message:    fmt.Sprintf("iOS provisioning profile expired: %s", signing.ProvisioningExpiresAt),
-				Evidence: []Evidence{{
-					Field:             "provisioning.expires_at",
-					MatchedTextMasked: signing.ProvisioningExpiresAt,
-				}},
-				Fingerprint: fingerprint("signing.provisioning_expired"),
-			})
+			findings = append(findings, signingFinding(
+				"signing.provisioning_expired", SeverityWarn, ConfidenceHigh,
+				fmt.Sprintf("iOS provisioning profile expired: %s", signing.ProvisioningExpiresAt),
+				"provisioning.expires_at", signing.ProvisioningExpiresAt,
+				"signing.provisioning_expired",
+			))
 		}
 	}
 
@@ -635,43 +625,41 @@ func scanSecretsInStrings(kvPairs map[string]string, source string) []SecretCand
 }
 
 func scanSecretsInMap(m map[string]any, source string) []SecretCandidate {
-	flat := flattenMap(m, "")
+	flat := make(map[string]string)
+	walkStringLeaves(m, "", func(key, value string) {
+		flat[key] = value
+	})
 	return scanSecretsInStrings(flat, source)
 }
 
-func flattenMap(m map[string]any, prefix string) map[string]string {
-	result := make(map[string]string)
+// walkStringLeaves visits every string-typed leaf in a nested structure
+// of map[string]any, []any, and []string. The callback receives the
+// dotted key path and the string value.
+func walkStringLeaves(m map[string]any, prefix string, fn func(key, value string)) {
 	for k, v := range m {
 		key := k
 		if prefix != "" {
 			key = prefix + "." + k
 		}
-		switch val := v.(type) {
-		case string:
-			result[key] = val
-		case map[string]any:
-			for fk, fv := range flattenMap(val, key) {
-				result[fk] = fv
-			}
-		case []any:
-			for i, item := range val {
-				elemKey := fmt.Sprintf("%s[%d]", key, i)
-				switch elem := item.(type) {
-				case string:
-					result[elemKey] = elem
-				case map[string]any:
-					for fk, fv := range flattenMap(elem, elemKey) {
-						result[fk] = fv
-					}
-				}
-			}
-		case []string:
-			for i, elem := range val {
-				result[fmt.Sprintf("%s[%d]", key, i)] = elem
-			}
+		visitValue(key, v, fn)
+	}
+}
+
+func visitValue(key string, v any, fn func(key, value string)) {
+	switch val := v.(type) {
+	case string:
+		fn(key, val)
+	case map[string]any:
+		walkStringLeaves(val, key, fn)
+	case []any:
+		for i, item := range val {
+			visitValue(fmt.Sprintf("%s[%d]", key, i), item, fn)
+		}
+	case []string:
+		for i, elem := range val {
+			fn(fmt.Sprintf("%s[%d]", key, i), elem)
 		}
 	}
-	return result
 }
 
 func maskSecret(value string) string {
