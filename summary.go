@@ -133,14 +133,19 @@ func WriteSummaryMarkdown(w io.Writer, rf ReportFile) error {
 		m.H2("Network Endpoints")
 		rows := make([][]string, 0, len(ar.NetworkEndpoints))
 		for _, ep := range ar.NetworkEndpoints {
-			host := ep.Host
-			if ep.Scheme != "" && host != "" {
-				host = ep.Scheme + "://" + host
+			var display string
+			switch {
+			case ep.Scheme != "" && ep.Host != "":
+				display = ep.Scheme + "://" + ep.Host
+			case ep.Scheme != "" && ep.Host == "":
+				display = ep.Scheme + "://*"
+			default:
+				display = ep.Host
 			}
 			if ep.Path != "" {
-				host += ep.Path
+				display += ep.Path
 			}
-			rows = append(rows, []string{host, ep.Source, string(ep.Confidence)})
+			rows = append(rows, []string{display, ep.Source, string(ep.Confidence)})
 		}
 		m.Table(md.TableSet{
 			Header: []string{"Endpoint", "Source", "Confidence"},
@@ -288,26 +293,48 @@ type deepLinkEntry struct {
 
 // collectDeepLinks extracts deep link URI patterns from exported component
 // intent-filters. Each DataSpec with a non-empty scheme or host produces
-// one entry.
+// one entry. Entries are deduplicated by normalized component+URI+actions.
 func collectDeepLinks(components []ExportedComponent) []deepLinkEntry {
 	var links []deepLinkEntry
+	seen := make(map[string]struct{})
+
 	for _, ec := range components {
 		for _, f := range ec.IntentFilters {
 			for _, d := range f.Data {
 				if d.Scheme == "" && d.Host == "" {
 					continue
 				}
-				uri := d.Scheme + "://"
-				if d.Host != "" {
-					uri += d.Host
+
+				var uri string
+				switch {
+				case d.Scheme != "" && d.Host != "":
+					uri = d.Scheme + "://" + d.Host
+				case d.Scheme != "" && d.Host == "":
+					uri = d.Scheme + "://*"
+				default:
+					// Host-only (no scheme) — unusual but valid.
+					uri = d.Host
 				}
 				if d.Path != "" {
 					uri += d.Path
 				}
+
+				// Skip wildcard-only entries that carry no information.
+				if d.Host == "*" && d.Scheme == "" {
+					continue
+				}
+
+				actions := strings.Join(f.Actions, ", ")
+				key := strings.ToLower(ec.Name + "|" + uri + "|" + actions)
+				if _, ok := seen[key]; ok {
+					continue
+				}
+				seen[key] = struct{}{}
+
 				links = append(links, deepLinkEntry{
 					component: ec.Name,
 					uri:       uri,
-					actions:   strings.Join(f.Actions, ", "),
+					actions:   actions,
 				})
 			}
 		}
