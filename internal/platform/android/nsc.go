@@ -119,8 +119,9 @@ func parseNetworkSecurityConfig(zr *zip.Reader, configRef string, maxBytes int64
 	}
 
 	// Domain configs (with recursive nested support).
+	// Top-level domain-configs inherit cleartext from base-config.
 	for _, dc := range root.DomainConfigs {
-		domainCfg := convertDomainConfig(dc, policy)
+		domainCfg := convertDomainConfig(dc, policy.CleartextPermitted, policy)
 		policy.DomainConfigs = append(policy.DomainConfigs, domainCfg)
 	}
 
@@ -140,9 +141,19 @@ func parseNetworkSecurityConfig(zr *zip.Reader, configRef string, maxBytes int64
 // convertDomainConfig recursively converts an nscDomainConfig (XML) into a
 // DomainConfig, including any nested domain-config elements. It also updates
 // the policy's HasPinSet flag as a side effect.
-func convertDomainConfig(dc nscDomainConfig, policy *NetworkSecurityPolicy) DomainConfig {
+//
+// parentCleartext is the cleartext permission inherited from the parent scope
+// (base-config for top-level, or the parent domain-config for nested ones).
+// Android NSC inheritance: if a child does not set cleartextTrafficPermitted,
+// it inherits the parent's value.
+func convertDomainConfig(dc nscDomainConfig, parentCleartext bool, policy *NetworkSecurityPolicy) DomainConfig {
+	cleartext := parentCleartext
+	if dc.CleartextTraffic != "" {
+		cleartext = strings.EqualFold(dc.CleartextTraffic, "true")
+	}
+
 	domainCfg := DomainConfig{
-		CleartextPermitted: strings.EqualFold(dc.CleartextTraffic, "true"),
+		CleartextPermitted: cleartext,
 		HasPinSet:          dc.PinSet != nil && len(dc.PinSet.Pins) > 0,
 	}
 	for _, d := range dc.Domains {
@@ -152,7 +163,7 @@ func convertDomainConfig(dc nscDomainConfig, policy *NetworkSecurityPolicy) Doma
 		policy.HasPinSet = true
 	}
 	for _, nested := range dc.NestedConfigs {
-		domainCfg.NestedConfigs = append(domainCfg.NestedConfigs, convertDomainConfig(nested, policy))
+		domainCfg.NestedConfigs = append(domainCfg.NestedConfigs, convertDomainConfig(nested, cleartext, policy))
 	}
 	return domainCfg
 }
