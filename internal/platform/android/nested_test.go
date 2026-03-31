@@ -24,7 +24,7 @@ func TestOpenAllInnerAPKs_CapsAtMaxInnerAPKs(t *testing.T) {
 	innerBytes := innerBuf.Bytes()
 
 	count := maxInnerAPKs + 10
-	for i := 0; i < count; i++ {
+	for i := range count {
 		name := "split_" + string(rune('A'+i/26)) + string(rune('a'+i%26)) + ".apk"
 		w, err := outerW.Create(name)
 		require.NoError(t, err)
