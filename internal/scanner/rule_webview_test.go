@@ -53,9 +53,10 @@ func TestInsecureWebView_CheckTrue_Targets(t *testing.T) {
 
 	// Verify that checkTrue is set for the right methods.
 	checkTrueMethods := map[string]bool{
-		"setJavaScriptEnabled":           true,
-		"setAllowFileAccess":             true,
-		"setWebContentsDebuggingEnabled": true,
+		"setJavaScriptEnabled":                true,
+		"setAllowFileAccess":                  true,
+		"setAllowUniversalAccessFromFileURLs": true,
+		"setWebContentsDebuggingEnabled":      true,
 	}
 
 	for _, wt := range webviewTargets {
@@ -135,4 +136,24 @@ func TestInsecureWebView_EmptyContext(t *testing.T) {
 	rule := &insecureWebViewRule{}
 	findings := rule.Match(ctx)
 	assert.Empty(t, findings)
+}
+
+func TestInsecureWebView_AllCheckTrueTargets(t *testing.T) {
+	t.Parallel()
+
+	expected := map[string]bool{
+		"setJavaScriptEnabled":                true,
+		"setAllowFileAccess":                  true,
+		"setAllowUniversalAccessFromFileURLs": true,
+		"setWebContentsDebuggingEnabled":      true,
+	}
+
+	actual := make(map[string]bool)
+	for _, wt := range webviewTargets {
+		if wt.checkTrue {
+			actual[wt.method] = true
+		}
+	}
+
+	assert.Equal(t, expected, actual, "checkTrue targets should match expected set")
 }

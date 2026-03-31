@@ -85,17 +85,7 @@ func (r *insecureWebViewRule) Match(ctx *Context) []Finding {
 				}
 				seen[key] = struct{}{}
 
-				severity := wt.severity
-				confidence := confHigh
-				msg := fmt.Sprintf("%s (in %s)", wt.message, cs.CallerClass)
-
-				if isKnownLibraryClass(cs.CallerClass) {
-					if severity == sevError {
-						severity = sevWarn
-					}
-					confidence = confMedium
-					msg = fmt.Sprintf("%s (in library %s)", wt.message, cs.CallerClass)
-				}
+				severity, confidence, msg := adjustForLibrary(cs.CallerClass, wt.severity, wt.message)
 
 				findings = append(findings, Finding{
 					ID:          fmt.Sprintf("dex.webview.%s.%s", wt.method, sanitizeID(cs.CallerClass)),
@@ -143,14 +133,7 @@ func (r *insecureWebViewRule) Match(ctx *Context) []Finding {
 			}
 			seen[key] = struct{}{}
 
-			severity := sevError
-			confidence := confHigh
-			msg := fmt.Sprintf("SSL error bypassed — SslErrorHandler.proceed() called (in %s)", cs.CallerClass)
-			if isKnownLibraryClass(cs.CallerClass) {
-				severity = sevWarn
-				confidence = confMedium
-				msg = fmt.Sprintf("SSL error bypassed — SslErrorHandler.proceed() called (in library %s)", cs.CallerClass)
-			}
+			severity, confidence, msg := adjustForLibrary(cs.CallerClass, sevError, "SSL error bypassed — SslErrorHandler.proceed() called")
 
 			findings = append(findings, Finding{
 				ID:          fmt.Sprintf("dex.webview.ssl_bypass.%s", sanitizeID(cs.CallerClass)),

@@ -105,17 +105,7 @@ func matchPerCallsite(ctx *Context, dt dangerousTarget) []Finding {
 			}
 			seen[key] = struct{}{}
 
-			severity := dt.severity
-			confidence := confHigh
-			msg := fmt.Sprintf("%s (in %s)", dt.message, cs.CallerClass)
-
-			if isKnownLibraryClass(cs.CallerClass) {
-				if severity == sevError {
-					severity = sevWarn
-				}
-				confidence = confMedium
-				msg = fmt.Sprintf("%s (in library %s)", dt.message, cs.CallerClass)
-			}
+			severity, confidence, msg := adjustForLibrary(cs.CallerClass, dt.severity, dt.message)
 
 			findings = append(findings, Finding{
 				ID:          fmt.Sprintf("dex.api.%s.%s.%s", sanitizeID(dt.class), dt.method, sanitizeID(cs.CallerClass)),
