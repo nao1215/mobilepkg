@@ -217,6 +217,9 @@ var knownLibraryPrefixes = []string{
 	// Reactive / coroutines
 	"Lio/reactivex/",
 	"Lkotlinx/",
+	// Cloud SDKs
+	"Lcom/amazonaws/",
+	"Lcom/microsoft/",
 }
 
 // isKnownLibraryClass returns true if the caller class belongs to a

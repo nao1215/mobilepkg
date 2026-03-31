@@ -236,6 +236,8 @@ func TestIsKnownLibraryClass(t *testing.T) {
 		{"Google Play Services", "Lcom/google/android/gms/common/GoogleApiClient;", true},
 		{"AndroidX", "Landroidx/work/impl/background/systemjob/SystemJobService;", true},
 		{"Sentry", "Lio/sentry/android/core/SentryAndroid;", true},
+		{"AWS SDK", "Lcom/amazonaws/services/s3/AmazonS3Client;", true},
+		{"Microsoft SDK", "Lcom/microsoft/identity/client/PublicClientApplication;", true},
 		// Broad vendor prefixes must NOT match — they include first-party app code.
 		{"Google VR (first-party)", "Lcom/google/vr/dynamite/client/DynamiteClient;", false},
 		{"Chromium base (first-party)", "Lorg/chromium/base/BundleUtils;", false},

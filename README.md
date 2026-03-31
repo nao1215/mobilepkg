@@ -14,7 +14,7 @@ mobilepkg is built for security engineers who need a quick initial assessment of
 
 mobilepkg runs on Linux, Windows, and macOS, and supports Go 1.25 or later.
 
-### What it does well
+## What it does well
 
 - Extracts manifest metadata, signing info, permissions, exported components, deep links, and network endpoints from Android packages (APK, XAPK, APKS, AAB).
 - Scans all DEX files across base and split APKs for hardcoded secrets (AWS keys, GCP API keys, GitHub tokens), cleartext HTTP URLs, dangerous API calls (Runtime.exec, DexClassLoader), and insecure WebView configuration.
@@ -23,11 +23,11 @@ mobilepkg runs on Linux, Windows, and macOS, and supports Go 1.25 or later.
 - Supports baseline diff to track permission, component, and version changes between releases.
 - CI integration: `--fail-on warn` exits non-zero when findings exceed a severity threshold.
 
-### What to expect with normal apps
+## What to expect with normal apps
 
 On well-maintained production apps, mobilepkg typically reports `allow_backup`, a few exported components, and some dangerous API calls from third-party libraries. Library-originated API calls (e.g. crash reporters using `Runtime.exec`) are automatically downgraded to `warn/medium` to distinguish them from app-level code. Cleartext URL findings from DEX strings may include legitimate logging or configuration endpoints that happen to use HTTP.
 
-### iOS coverage
+## iOS coverage
 
 iOS IPA inspection currently covers entitlements (including `get-task-allow` debug detection), code signing certificate validation, URL schemes, and associated domains. It does not scan compiled Swift/ObjC binaries for API calls or secrets. Android inspection is deeper.
 
@@ -69,7 +69,7 @@ The `--format markdown` output leads with the most actionable information — to
 
 On an intentionally vulnerable app like [AndroGoat](https://github.com/satishpatnayak/AndroGoat), the report surfaces debug builds, hardcoded AWS keys, command injection via `Runtime.exec`, and unguarded exported components:
 
-```
+```markdown
 ## Top Findings
 > [!WARNING]
 > 10 finding(s) at warning severity or above.
@@ -92,7 +92,7 @@ On an intentionally vulnerable app like [AndroGoat](https://github.com/satishpat
 
 On a well-maintained production app like F-Droid, findings are less severe. Library-originated API calls are flagged at reduced severity. The deep link and endpoint sections show the app's registered URI handlers:
 
-```
+```markdown
 ## Top Findings
 > [!WARNING]
 > 6 finding(s) at warning severity or above.
