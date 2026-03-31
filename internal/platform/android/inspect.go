@@ -517,6 +517,16 @@ func detectImageFormat(path string) string {
 // It converts the binary XML format used in APK files into text XML
 // that can be decoded by encoding/xml.
 
+// maxStringPoolCount is the upper bound for string/style counts in a
+// resource string pool. Legitimate APKs rarely exceed 100 000 strings;
+// this cap prevents a crafted header from causing a multi-gigabyte
+// allocation.
+const maxStringPoolCount = 1 << 20 // ~1 million entries
+
+// maxTableEntryCount is the upper bound for entry counts in a resource
+// table type chunk. Same rationale as maxStringPoolCount.
+const maxTableEntryCount = 1 << 20
+
 type resChunkHeader struct {
 	Type       uint16
 	HeaderSize uint16
@@ -630,6 +640,13 @@ func readStringPool(sr *io.SectionReader) (*resStringPool, error) {
 	var hdr resStringPoolHeader
 	if err := binary.Read(sr, binary.LittleEndian, &hdr); err != nil {
 		return nil, err
+	}
+
+	if hdr.StringCount > maxStringPoolCount {
+		return nil, fmt.Errorf("string pool: string count %d exceeds limit %d", hdr.StringCount, maxStringPoolCount)
+	}
+	if hdr.StyleCount > maxStringPoolCount {
+		return nil, fmt.Errorf("string pool: style count %d exceeds limit %d", hdr.StyleCount, maxStringPoolCount)
 	}
 
 	offsets := make([]uint32, hdr.StringCount)
@@ -1093,6 +1110,9 @@ func readTableType(sr *io.SectionReader, baseOffset int64, ch resChunkHeader) (*
 	// Read entry index array
 	// The area between headerSize and entriesStart contains the entry offsets
 	indexCount := hdr.EntryCount
+	if indexCount > maxTableEntryCount {
+		return nil, fmt.Errorf("table type: entry count %d exceeds limit %d", indexCount, maxTableEntryCount)
+	}
 	indexes := make([]uint32, indexCount)
 	if err := binary.Read(sr, binary.LittleEndian, indexes); err != nil {
 		return nil, err
