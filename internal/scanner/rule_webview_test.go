@@ -92,6 +92,10 @@ func TestIsBoolArgTrue_ConstFour(t *testing.T) {
 	f, err := dex.Parse(data)
 	require.NoError(t, err)
 
+	// dex.Parse stores a reference to the input slice, so mutations to data
+	// are visible through f.RawData(). This lets us inject synthetic bytecode
+	// to test isBoolArgTrue without building a full DEX with code_items.
+
 	// Test with a synthetic CallSite at a known offset.
 	// Place const/4 v0, 1 (true) at offset 0x70, invoke at 0x72
 	data[0x70] = 0x12 // const/4 opcode

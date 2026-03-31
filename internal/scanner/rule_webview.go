@@ -113,8 +113,8 @@ func (r *insecureWebViewRule) Match(ctx *Context) []Finding {
 				findings = append(findings, Finding{
 					ID:          fmt.Sprintf("dex.webview.loadUrl_http.%s", sanitizeID(cs.CallerClass)),
 					Category:    "dex_webview",
-					Severity:    "warn",
-					Confidence:  "high",
+					Severity:    sevWarn,
+					Confidence:  confHigh,
 					Message:     fmt.Sprintf("WebView loads cleartext HTTP URL (in %s)", cs.CallerClass),
 					ArchivePath: ctx.dexName(i),
 					Field:       fmt.Sprintf("%s->%s", cs.CallerClass, cs.CallerMethod),

@@ -1,6 +1,7 @@
 package scanner
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/nao1215/mobilepkg/internal/dex"
@@ -87,16 +88,5 @@ func findIDHashPart(id string) string {
 }
 
 func splitDots(s string) []string {
-	var parts []string
-	start := 0
-	for i, c := range s {
-		if c == '.' {
-			parts = append(parts, s[start:i])
-			start = i + 1
-		}
-	}
-	if start < len(s) {
-		parts = append(parts, s[start:])
-	}
-	return parts
+	return strings.Split(s, ".")
 }

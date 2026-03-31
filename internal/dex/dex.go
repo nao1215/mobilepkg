@@ -114,6 +114,7 @@ type methodKey struct {
 }
 
 // RawData returns the raw DEX file bytes for low-level instruction analysis.
+// The returned slice is shared with the File; callers must not modify it.
 func (f *File) RawData() []byte {
 	return f.data
 }

@@ -3,6 +3,7 @@ package mobilepkg
 import (
 	"archive/zip"
 	"bytes"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -624,7 +625,7 @@ func TestIsWeakKeySize(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.algo+string(rune('0'+tt.bits%10)), func(t *testing.T) {
+		t.Run(fmt.Sprintf("%s_%d", tt.algo, tt.bits), func(t *testing.T) {
 			t.Parallel()
 			assert.Equal(t, tt.weak, isWeakKeySize(tt.algo, tt.bits))
 		})
