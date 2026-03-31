@@ -36,6 +36,8 @@ type Result struct {
 	Debuggable            bool
 	AllowBackup           bool
 	UsesCleartextTraffic  bool
+	TestOnly              bool
+	ProfileableByShell    bool
 	NetworkSecurityConfig string
 	NSCPolicy             *NetworkSecurityPolicy
 	MinSDK                string
@@ -51,12 +53,15 @@ type Result struct {
 
 // ExportedComponent represents an Android component that is exported.
 type ExportedComponent struct {
-	Kind          string // "activity", "service", "receiver", "provider"
-	Name          string
-	Exported      bool
-	Permission    string
-	Authorities   string             // content provider authorities
-	IntentFilters []IntentFilterInfo // intent-filter details
+	Kind                string // "activity", "service", "receiver", "provider"
+	Name                string
+	Exported            bool
+	Permission          string
+	Authorities         string             // content provider authorities
+	IntentFilters       []IntentFilterInfo // intent-filter details
+	ReadPermission      string
+	WritePermission     string
+	GrantURIPermissions string
 }
 
 // IntentFilterInfo holds parsed intent-filter data for an exported component.
@@ -157,6 +162,8 @@ func Inspect(zr *zip.Reader, sections uint64, r io.ReaderAt, size int64, maxEntr
 	result.Debuggable = strings.EqualFold(manifest.App.Debuggable, "true")
 	result.AllowBackup = manifest.App.AllowBackup == "" || strings.EqualFold(manifest.App.AllowBackup, "true")
 	result.UsesCleartextTraffic = strings.EqualFold(manifest.App.UsesCleartextTraffic, "true")
+	result.TestOnly = strings.EqualFold(manifest.App.TestOnly, "true")
+	result.ProfileableByShell = strings.EqualFold(manifest.App.ProfileableByShell, "true")
 	result.NetworkSecurityConfig = manifest.App.NetworkSecurityConfig
 	result.NSCPolicy = parseNetworkSecurityConfig(zr, manifest.App.NetworkSecurityConfig, maxEntryBytes)
 
@@ -299,6 +306,8 @@ type application struct {
 	AllowBackup           string     `xml:"allowBackup,attr"`
 	UsesCleartextTraffic  string     `xml:"usesCleartextTraffic,attr"`
 	NetworkSecurityConfig string     `xml:"networkSecurityConfig,attr"`
+	TestOnly              string     `xml:"testOnly,attr"`
+	ProfileableByShell    string     `xml:"profileableByShell,attr"`
 	Activities            []activity `xml:"activity"`
 	Services              []service  `xml:"service"`
 	Receivers             []receiver `xml:"receiver"`
@@ -327,10 +336,13 @@ type receiver struct {
 }
 
 type provider struct {
-	Name        string `xml:"name,attr"`
-	Exported    string `xml:"exported,attr"`
-	Permission  string `xml:"permission,attr"`
-	Authorities string `xml:"authorities,attr"`
+	Name                string `xml:"name,attr"`
+	Exported            string `xml:"exported,attr"`
+	Permission          string `xml:"permission,attr"`
+	Authorities         string `xml:"authorities,attr"`
+	ReadPermission      string `xml:"readPermission,attr"`
+	WritePermission     string `xml:"writePermission,attr"`
+	GrantURIPermissions string `xml:"grantUriPermissions,attr"`
 }
 
 type intentFilter struct {
@@ -441,11 +453,14 @@ func extractExportedComponents(m manifest) []ExportedComponent {
 	for _, p := range m.App.Providers {
 		if isComponentExported(p.Exported, false) {
 			components = append(components, ExportedComponent{
-				Kind:        "provider",
-				Name:        p.Name,
-				Exported:    true,
-				Permission:  p.Permission,
-				Authorities: p.Authorities,
+				Kind:                "provider",
+				Name:                p.Name,
+				Exported:            true,
+				Permission:          p.Permission,
+				Authorities:         p.Authorities,
+				ReadPermission:      p.ReadPermission,
+				WritePermission:     p.WritePermission,
+				GrantURIPermissions: p.GrantURIPermissions,
 			})
 		}
 	}
