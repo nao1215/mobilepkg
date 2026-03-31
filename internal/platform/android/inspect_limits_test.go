@@ -93,7 +93,7 @@ func TestReadUTF16String_RejectsOverlargeLength(t *testing.T) {
 	// Total length = (first & 0x7FFF) << 16 + second.
 	// We want size*2 > maxStringBytes, so size > maxStringBytes/2.
 	wantSize := maxStringBytes/2 + 1
-	first := uint16(0x8000 | uint16(wantSize>>16))
+	first := 0x8000 | uint16(wantSize>>16)
 	second := uint16(wantSize & 0xFFFF)
 
 	var buf bytes.Buffer
