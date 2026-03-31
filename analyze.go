@@ -3,10 +3,11 @@ package mobilepkg
 import (
 	"crypto/sha256"
 	"fmt"
-	"regexp"
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/nao1215/mobilepkg/internal/secrets"
 )
 
 // analyzeReport performs security analysis on an inspection [report] and
@@ -615,34 +616,16 @@ func extractDeepLinkEndpoints(components []ExportedComponent) []NetworkEndpoint 
 	return endpoints
 }
 
-// secretPatterns defines regex patterns for detecting potential secrets.
-// This list is shared by both manifest/plist scanning and DEX string scanning
-// to ensure consistent detection across all sources.
-var secretPatterns = []struct {
-	kind       string
-	pattern    *regexp.Regexp
-	confidence Confidence
-}{
-	{"aws_key", regexp.MustCompile(`AKIA[0-9A-Z]{16}`), ConfidenceHigh},
-	{"gcp_api_key", regexp.MustCompile(`AIza[0-9A-Za-z_\-]{35}`), ConfidenceHigh},
-	{"github_token", regexp.MustCompile(`gh[pousr]_[A-Za-z0-9_]{36,}`), ConfidenceHigh},
-	{"private_key", regexp.MustCompile(`-----BEGIN (RSA |EC |DSA )?PRIVATE KEY-----`), ConfidenceHigh},
-	{"firebase_url", regexp.MustCompile(`https://[a-z0-9-]+\.firebaseio\.com`), ConfidenceMedium},
-	{"api_key", regexp.MustCompile(`(?i)(?:api[_-]?key|apikey)\s*[=:]\s*["']?([A-Za-z0-9_\-]{20,})["']?`), ConfidenceMedium},
-	{"bearer_token", regexp.MustCompile(`Bearer\s+[A-Za-z0-9_\-\.]{20,}`), ConfidenceMedium},
-	{"generic_secret", regexp.MustCompile(`(?i)(?:secret|password|passwd|token|credential)\s*[=:]\s*["']([^"']{8,})["']`), ConfidenceLow},
-}
-
 func scanSecretsInStrings(kvPairs map[string]string, source string) []SecretCandidate {
 	var candidates []SecretCandidate
 	for key, value := range kvPairs {
-		for _, sp := range secretPatterns {
-			if sp.pattern.MatchString(value) || sp.pattern.MatchString(key+"="+value) {
+		for _, sp := range secrets.Patterns {
+			if sp.Re.MatchString(value) || sp.Re.MatchString(key+"="+value) {
 				candidates = append(candidates, SecretCandidate{
-					Kind:        sp.kind,
+					Kind:        sp.Kind,
 					MaskedValue: maskSecret(value),
 					Source:      source,
-					Confidence:  sp.confidence,
+					Confidence:  Confidence(sp.Confidence),
 				})
 				break
 			}

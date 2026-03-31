@@ -3,35 +3,14 @@ package scanner
 import (
 	"crypto/sha256"
 	"fmt"
-	"regexp"
 	"strings"
+
+	"github.com/nao1215/mobilepkg/internal/secrets"
 )
 
 type hardcodedSecretsRule struct{}
 
 func (r *hardcodedSecretsRule) Name() string { return "HardcodedSecrets" }
-
-// secretPattern defines a regex pattern for detecting potential secrets in DEX strings.
-type secretPattern struct {
-	kind       string
-	pattern    *regexp.Regexp
-	severity   string
-	confidence string
-}
-
-// dexSecretPatterns is the unified set of secret patterns used for DEX string
-// scanning. It mirrors the patterns in the root analyze.go secretPatterns to
-// ensure consistent detection across manifest/plist and DEX sources.
-var dexSecretPatterns = []secretPattern{
-	{"aws_key", regexp.MustCompile(`AKIA[0-9A-Z]{16}`), "error", "high"},
-	{"gcp_api_key", regexp.MustCompile(`AIza[0-9A-Za-z_\-]{35}`), "error", "high"},
-	{"github_token", regexp.MustCompile(`gh[pousr]_[A-Za-z0-9_]{36,}`), "error", "high"},
-	{"private_key", regexp.MustCompile(`-----BEGIN (RSA |EC |DSA )?PRIVATE KEY-----`), "error", "high"},
-	{"firebase_url", regexp.MustCompile(`https://[a-z0-9-]+\.firebaseio\.com`), "warn", "medium"},
-	{"generic_api_key", regexp.MustCompile(`(?i)(?:api[_-]?key|apikey)\s*[=:]\s*["']?([A-Za-z0-9_\-]{20,})["']?`), "warn", "medium"},
-	{"bearer_token", regexp.MustCompile(`Bearer\s+[A-Za-z0-9_\-\.]{20,}`), "warn", "medium"},
-	{"generic_secret", regexp.MustCompile(`(?i)(?:secret|password|passwd|token|credential)\s*[=:]\s*["']([^"']{8,})["']`), "warn", "low"},
-}
 
 // Strings that are common in DEX but should not trigger findings.
 var secretExclusions = []string{
@@ -57,8 +36,8 @@ func (r *hardcodedSecretsRule) Match(ctx *Context) []Finding {
 				continue
 			}
 
-			for _, sp := range dexSecretPatterns {
-				match := sp.pattern.FindString(s)
+			for _, sp := range secrets.Patterns {
+				match := sp.Re.FindString(s)
 				if match == "" {
 					continue
 				}
@@ -73,11 +52,11 @@ func (r *hardcodedSecretsRule) Match(ctx *Context) []Finding {
 				hashID := fmt.Sprintf("%x", h[:6])
 
 				findings = append(findings, Finding{
-					ID:          fmt.Sprintf("dex.secret.%s.%s", sp.kind, hashID),
+					ID:          fmt.Sprintf("dex.secret.%s.%s", sp.Kind, hashID),
 					Category:    "dex_secret",
-					Severity:    sp.severity,
-					Confidence:  sp.confidence,
-					Message:     fmt.Sprintf("potential %s found in DEX string table", sp.kind),
+					Severity:    sp.Severity,
+					Confidence:  sp.Confidence,
+					Message:     fmt.Sprintf("potential %s found in DEX string table", sp.Kind),
 					ArchivePath: ctx.dexName(i),
 					Field:       "string_table",
 					Matched:     match,
