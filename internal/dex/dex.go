@@ -113,6 +113,12 @@ type methodKey struct {
 	methodName string
 }
 
+// RawData returns the raw DEX file bytes for low-level instruction analysis.
+// The returned slice is shared with the File; callers must not modify it.
+func (f *File) RawData() []byte {
+	return f.data
+}
+
 // Strings returns all strings from the DEX string table.
 func (f *File) Strings() []string {
 	return f.strings

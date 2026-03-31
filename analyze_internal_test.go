@@ -156,14 +156,17 @@ func TestIOSHelpersAndEntitlements(t *testing.T) {
 func TestScanSecretsMaskingAndFlatten(t *testing.T) {
 	t.Parallel()
 
-	flat := flattenMap(map[string]any{
+	flat := make(map[string]string)
+	walkStringLeaves(map[string]any{
 		"outer": map[string]any{
 			"inner": "api_key=abcdefghijklmnopqrstuvwxyz123456",
 		},
 		"ignored": 123,
-	}, "")
+	}, "", func(key, value string) {
+		flat[key] = value
+	})
 	if flat["outer.inner"] == "" {
-		t.Fatalf("flattenMap = %#v, want nested key", flat)
+		t.Fatalf("walkStringLeaves = %#v, want nested key", flat)
 	}
 
 	candidates := scanSecretsInMap(map[string]any{

@@ -2,6 +2,9 @@ package ios
 
 import (
 	"bytes"
+	"crypto/dsa" //nolint:staticcheck // type assertion only; not generating DSA keys
+	"crypto/ecdsa"
+	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/x509"
 	"fmt"
@@ -23,12 +26,16 @@ type ProvisionInfo struct {
 
 // CertResult holds a parsed X.509 certificate summary.
 type CertResult struct {
-	Subject           string
-	Issuer            string
-	NotBefore         string // RFC 3339
-	NotAfter          string // RFC 3339
-	SHA256Fingerprint string // hex
-	SerialNumber      string
+	Subject            string
+	Issuer             string
+	NotBefore          string // RFC 3339
+	NotAfter           string // RFC 3339
+	SHA256Fingerprint  string // hex
+	SerialNumber       string
+	SignatureAlgorithm string
+	PublicKeyAlgorithm string
+	KeySize            int
+	SelfSigned         bool
 }
 
 // ExtractProvisioningInfo parses an embedded.mobileprovision file and
@@ -114,12 +121,41 @@ func certToResult(cert *x509.Certificate) CertResult {
 
 	fp := sha256.Sum256(cert.Raw)
 
+	var pubKeyAlgo string
+	var keySize int
+	switch cert.PublicKeyAlgorithm {
+	case x509.RSA:
+		pubKeyAlgo = "RSA"
+		if pk, ok := cert.PublicKey.(*rsa.PublicKey); ok {
+			keySize = pk.N.BitLen()
+		}
+	case x509.ECDSA:
+		pubKeyAlgo = "ECDSA"
+		if pk, ok := cert.PublicKey.(*ecdsa.PublicKey); ok {
+			keySize = pk.Curve.Params().BitSize
+		}
+	case x509.Ed25519:
+		pubKeyAlgo = "Ed25519"
+		keySize = 256
+	case x509.DSA:
+		pubKeyAlgo = "DSA"
+		if pk, ok := cert.PublicKey.(*dsa.PublicKey); ok && pk.P != nil {
+			keySize = pk.P.BitLen()
+		}
+	default:
+		pubKeyAlgo = cert.PublicKeyAlgorithm.String()
+	}
+
 	return CertResult{
-		Subject:           subject,
-		Issuer:            issuer,
-		NotBefore:         cert.NotBefore.UTC().Format("2006-01-02T15:04:05Z"),
-		NotAfter:          cert.NotAfter.UTC().Format("2006-01-02T15:04:05Z"),
-		SHA256Fingerprint: fmt.Sprintf("%x", fp),
-		SerialNumber:      cert.SerialNumber.String(),
+		Subject:            subject,
+		Issuer:             issuer,
+		NotBefore:          cert.NotBefore.UTC().Format("2006-01-02T15:04:05Z"),
+		NotAfter:           cert.NotAfter.UTC().Format("2006-01-02T15:04:05Z"),
+		SHA256Fingerprint:  fmt.Sprintf("%x", fp),
+		SerialNumber:       cert.SerialNumber.String(),
+		SignatureAlgorithm: cert.SignatureAlgorithm.String(),
+		PublicKeyAlgorithm: pubKeyAlgo,
+		KeySize:            keySize,
+		SelfSigned:         cert.Subject.String() == cert.Issuer.String(),
 	}
 }

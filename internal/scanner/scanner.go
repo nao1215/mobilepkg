@@ -4,8 +4,35 @@
 package scanner
 
 import (
+	"fmt"
+
 	"github.com/nao1215/mobilepkg/internal/dex"
 )
+
+// Severity and confidence string constants used across scanner rules.
+const (
+	sevError = "error"
+	sevWarn  = "warn"
+	sevInfo  = "info"
+
+	confHigh   = "high"
+	confMedium = "medium"
+	confLow    = "low"
+)
+
+// adjustForLibrary lowers severity and confidence when the caller belongs
+// to a well-known library. Returns the adjusted severity, confidence, and
+// formatted message.
+func adjustForLibrary(callerClass, baseSeverity, baseMessage string) (severity, confidence, message string) {
+	if !isKnownLibraryClass(callerClass) {
+		return baseSeverity, confHigh, fmt.Sprintf("%s (in %s)", baseMessage, callerClass)
+	}
+	sev := baseSeverity
+	if sev == sevError {
+		sev = sevWarn
+	}
+	return sev, confMedium, fmt.Sprintf("%s (in library %s)", baseMessage, callerClass)
+}
 
 // Finding represents a security observation from a scanner rule.
 // Fields use plain types to avoid circular imports with the root package.

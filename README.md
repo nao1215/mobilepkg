@@ -8,28 +8,25 @@
 
 ![logo](./doc/image/mobilepkg_small_logo.png)
 
-A Go library and CLI for fast mobile package triage. One call extracts metadata, permissions, exported components, signing info, and security findings from APK, XAPK, APKS, AAB, and IPA files.
+mobilepkg inspects APK, AAB, APKS, XAPK, and IPA files and emits package metadata plus security findings as JSON, Markdown, or RDJSONL. It is intended for release triage and CI checks.
 
-mobilepkg is built for security engineers who need a quick initial assessment of a mobile package — identifying debug builds, hardcoded secrets, dangerous API usage, exported components, and deep links — without a full reverse-engineering workflow. It reads the package as a zip archive, parses the manifest and DEX bytecode in-process, and finishes in seconds. No Android SDK, Xcode, or device required.
+It reads the package as a zip archive, parses the manifest and DEX bytecode in-process, and finishes in seconds. No Android SDK, Xcode, or device required. Runs on Linux, Windows, and macOS (Go 1.25+).
 
-mobilepkg runs on Linux, Windows, and macOS, and supports Go 1.25 or later.
+## Scope
 
-## What it does well
-
-- Extracts manifest metadata, signing info, permissions, exported components, deep links, and network endpoints from Android packages (APK, XAPK, APKS, AAB).
-- Scans all DEX files across base and split APKs for hardcoded secrets (AWS keys, GCP API keys, GitHub tokens), cleartext HTTP URLs, dangerous API calls (Runtime.exec, DexClassLoader), and insecure WebView configuration.
-- Reads XAPK and APKS bundles directly — no need to extract them first.
-- Outputs Markdown reports suitable for `$GITHUB_STEP_SUMMARY` and pull request comments.
-- Supports baseline diff to track permission, component, and version changes between releases.
+- Manifest metadata, signing info, permissions, exported components, deep links, and network endpoints from Android packages (APK, XAPK, APKS, AAB).
+- DEX bytecode scanning across base and split APKs for hardcoded secrets, cleartext HTTP URLs, dangerous API calls, and insecure WebView configuration.
+- XAPK and APKS bundles read directly — no prior extraction needed.
+- Markdown reports for `$GITHUB_STEP_SUMMARY` and pull request comments.
+- Baseline diff for tracking permission, component, and version changes between releases.
 - CI integration: `--fail-on warn` exits non-zero when findings exceed a severity threshold.
 
-## What to expect with normal apps
+### Known limitations and common false positives
 
-On well-maintained production apps, mobilepkg typically reports `allow_backup`, a few exported components, and some dangerous API calls from third-party libraries. Library-originated API calls (e.g. crash reporters using `Runtime.exec`) are automatically downgraded to `warn/medium` to distinguish them from app-level code. Cleartext URL findings from DEX strings may include legitimate logging or configuration endpoints that happen to use HTTP.
-
-## iOS coverage
-
-iOS IPA inspection currently covers entitlements (including `get-task-allow` debug detection), code signing certificate validation, URL schemes, and associated domains. It does not scan compiled Swift/ObjC binaries for API calls or secrets. Android inspection is deeper.
+- On well-maintained production apps, mobilepkg typically reports `allow_backup`, a few exported components, and some dangerous API calls from third-party libraries. Library-originated API calls (e.g. crash reporters using `Runtime.exec`) are automatically downgraded to `warn/medium`.
+- Cleartext URL findings from DEX strings may include legitimate logging or configuration endpoints that happen to use HTTP.
+- iOS IPA inspection covers entitlements, ATS settings, code signing certificates, provisioning profile expiry, URL schemes, and associated domains. It does not scan compiled Swift/ObjC binaries for API calls or secrets. Android inspection is deeper.
+- WebView argument tracking is lightweight: it checks the immediately preceding `const/4` or `const/16` instruction. Non-trivial argument flow (e.g. values loaded from fields or computed) falls back to conservative reporting.
 
 | Format | Platform | Description |
 |--------|----------|-------------|
@@ -49,8 +46,6 @@ go get github.com/nao1215/mobilepkg                            # library
 ## CLI
 
 ### inspect — Inspect a mobile package
-
-The primary command. Extracts package facts and runs analysis in one step.
 
 ```bash
 $ mobilepkg inspect app.apk                                # JSON output (default)
@@ -200,18 +195,22 @@ for _, f := range result.Findings {
 }
 ```
 
-### What gets detected
+### Detection coverage
 
 | Category | Findings |
 |----------|----------|
-| Manifest | `debuggable`, `allowBackup`, `usesCleartextTraffic` |
-| Signing | Debug certificates, expired certificates |
-| Components | Exported activities/services/receivers/providers with intent-filters and deep links |
+| Manifest | `debuggable`, `allowBackup`, `usesCleartextTraffic`, `testOnly`, `profileableByShell` |
+| Network security config | Base-config cleartext, per-domain cleartext, nested domain-config inheritance, debug-overrides |
+| Signing | Debug certificates, expired certificates, v1-only signing, weak digest (MD5/SHA-1), weak key size (RSA<2048, ECDSA<256), self-signed test certificates |
+| Provisioning (iOS) | Expired provisioning profile |
+| Components | Exported activities/services/receivers/providers with intent-filters and deep links. No-permission components elevated to warn/error. Browsable activities flagged. Provider authorities, readPermission, writePermission, grantUriPermissions extracted. |
 | Permissions | Dangerous permissions (CAMERA, SMS, LOCATION, etc.) |
-| iOS | `get-task-allow` (debug build), URL schemes, associated domains |
-| Endpoints | ATS exception domains, URL schemes, deep links from intent-filters |
-| Secrets | Regex-based scan of manifest/plist metadata and DEX string tables (AWS keys, GCP API keys, GitHub tokens, private keys, bearer tokens, Firebase URLs) |
-| DEX bytecode | Hardcoded secrets, insecure WebView APIs, cleartext HTTP URLs, dangerous API calls (Runtime.exec, DexClassLoader, reflection, SMS). Library-originated calls are reported at reduced severity. Scans all DEX files across base and split APKs (APK, XAPK, APKS) and all modules (AAB). |
+| iOS ATS | `NSAllowsArbitraryLoads`, insecure exception domains (`NSExceptionAllowsInsecureHTTPLoads`) |
+| iOS entitlements | `get-task-allow` (debug build), URL schemes, associated domains |
+| Secrets | Regex-based scan of manifest/plist metadata and DEX string tables (AWS keys, GCP API keys, GitHub tokens, private keys, bearer tokens, Firebase URLs, generic api_key/secret/credential patterns). Both sources use the same pattern list. |
+| DEX WebView | `setJavaScriptEnabled(true)`, `addJavascriptInterface`, `setAllowFileAccess(true)`, `setAllowUniversalAccessFromFileURLs(true)`, `setWebContentsDebuggingEnabled(true)`, `setMixedContentMode`, `SslErrorHandler.proceed` bypass, `WebView.loadUrl("http://...")`. Boolean argument tracking via preceding `const/4`/`const/16`. Library-originated calls reported at reduced severity. |
+| DEX APIs | `Runtime.exec`, `ProcessBuilder`, `DexClassLoader`, `PathClassLoader`, `Method.invoke`, `SmsManager.sendTextMessage`, `DevicePolicyManager.resetPassword`, `Cipher.getInstance`. Library-originated calls reported at reduced severity. |
+| DEX cleartext | `http://` URLs in string tables (localhost/schema/spec URLs excluded). |
 
 ### Fail conditions (CI)
 

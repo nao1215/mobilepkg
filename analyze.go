@@ -3,10 +3,11 @@ package mobilepkg
 import (
 	"crypto/sha256"
 	"fmt"
-	"regexp"
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/nao1215/mobilepkg/internal/secrets"
 )
 
 // analyzeReport performs security analysis on an inspection [report] and
@@ -25,6 +26,8 @@ func analyzeReport(rpt report, opts analyzeOptions) analysisResult {
 	result.findings = append(result.findings, analyzeSigningInfo(rpt.Signing)...)
 	result.findings = append(result.findings, analyzeDangerousPermissions(rpt)...)
 	result.findings = append(result.findings, analyzeIOSEntitlements(rpt)...)
+	result.findings = append(result.findings, analyzeNSCPolicy(rpt)...)
+	result.findings = append(result.findings, analyzeIOSATS(rpt)...)
 
 	// DEX-based security scanning for Android.
 	if rpt.Platform == PlatformAndroid && len(opts.dexReaders) > 0 {
@@ -123,10 +126,71 @@ func analyzeManifestSecurity(r report) []Finding {
 		})
 	}
 
+	if r.TestOnly {
+		findings = append(findings, Finding{
+			ID:         "manifest.test_only",
+			Category:   "manifest",
+			Severity:   SeverityError,
+			Confidence: ConfidenceHigh,
+			Message:    "application is testOnly — can only be installed via adb, not suitable for production",
+			Evidence: []Evidence{{
+				ArchivePath: "AndroidManifest.xml",
+				Field:       "application[@testOnly]",
+			}},
+			Fingerprint: fingerprint("manifest", "testOnly"),
+		})
+	}
+
+	if r.ProfileableByShell {
+		findings = append(findings, Finding{
+			ID:         "manifest.profileable_by_shell",
+			Category:   "manifest",
+			Severity:   SeverityWarn,
+			Confidence: ConfidenceHigh,
+			Message:    "application is profileable from shell — may leak performance data in production",
+			Evidence: []Evidence{{
+				ArchivePath: "AndroidManifest.xml",
+				Field:       "application[@profileableByShell]",
+			}},
+			Fingerprint: fingerprint("manifest", "profileableByShell"),
+		})
+	}
+
 	return findings
 }
 
-// analyzeExportedComponents generates findings for exported components.
+// componentRiskResult holds the assessed risk for an exported component.
+type componentRiskResult struct {
+	severity  Severity
+	browsable bool
+	protected bool
+}
+
+// assessComponentRisk determines the risk level of an exported component.
+func assessComponentRisk(ec ExportedComponent) componentRiskResult {
+	hasProtection := ec.Permission != "" || ec.ReadPermission != "" || ec.WritePermission != ""
+	isBrowsable := componentIsBrowsable(ec)
+	isProvider := ec.Kind == "provider"
+
+	severity := SeverityInfo
+	switch {
+	case isProvider && !hasProtection:
+		severity = SeverityError
+	case isProvider:
+		severity = SeverityWarn
+	case !hasProtection && (ec.Kind == "service" || ec.Kind == "receiver"):
+		severity = SeverityWarn
+	case !hasProtection && ec.Kind == "activity" && isBrowsable:
+		severity = SeverityWarn
+	}
+
+	return componentRiskResult{
+		severity:  severity,
+		browsable: isBrowsable,
+		protected: hasProtection,
+	}
+}
+
 func analyzeExportedComponents(components []ExportedComponent) []Finding {
 	var findings []Finding
 	for _, ec := range components {
@@ -134,20 +198,28 @@ func analyzeExportedComponents(components []ExportedComponent) []Finding {
 			continue
 		}
 
-		severity := SeverityInfo
-		if ec.Kind == "provider" {
-			severity = SeverityWarn
-		}
+		risk := assessComponentRisk(ec)
 
 		msg := fmt.Sprintf("exported %s: %s", ec.Kind, ec.Name)
 		if ec.Permission != "" {
 			msg += fmt.Sprintf(" (requires %s)", ec.Permission)
+		} else if !risk.protected {
+			msg += " (no permission required)"
+		}
+		if risk.browsable {
+			msg += " [browsable]"
+		}
+		if ec.Authorities != "" {
+			msg += fmt.Sprintf(" [authorities: %s]", ec.Authorities)
+		}
+		if ec.Kind == "provider" && ec.GrantURIPermissions {
+			msg += " [grantUriPermissions]"
 		}
 
 		findings = append(findings, Finding{
 			ID:         fmt.Sprintf("exported.%s.%s", ec.Kind, sanitizeFindingID(ec.Name)),
 			Category:   "exported_component",
-			Severity:   severity,
+			Severity:   risk.severity,
 			Confidence: ConfidenceHigh,
 			Message:    msg,
 			Evidence: []Evidence{{
@@ -155,10 +227,39 @@ func analyzeExportedComponents(components []ExportedComponent) []Finding {
 				Field:             fmt.Sprintf("%s[@name]", ec.Kind),
 				MatchedTextMasked: ec.Name,
 			}},
-			Fingerprint: fingerprint("exported", ec.Kind, ec.Name),
+			Fingerprint: fingerprint("exported", ec.Kind, ec.Name,
+				ec.Permission, ec.ReadPermission, ec.WritePermission,
+				ec.Authorities,
+				fmt.Sprintf("%v", risk.browsable),
+				fmt.Sprintf("%v", ec.GrantURIPermissions)),
 		})
 	}
 	return findings
+}
+
+// componentIsBrowsable returns true if the component has a browsable intent-filter.
+func componentIsBrowsable(ec ExportedComponent) bool {
+	for _, f := range ec.IntentFilters {
+		for _, cat := range f.Categories {
+			if cat == "android.intent.category.BROWSABLE" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// signingFinding builds a Finding with the "signing" category.
+func signingFinding(id string, sev Severity, conf Confidence, msg, field, masked string, fpParts ...string) Finding {
+	return Finding{
+		ID:          id,
+		Category:    "signing",
+		Severity:    sev,
+		Confidence:  conf,
+		Message:     msg,
+		Evidence:    []Evidence{{Field: field, MatchedTextMasked: masked}},
+		Fingerprint: fingerprint(fpParts...),
+	}
 }
 
 // analyzeSigningInfo generates findings from signing certificate information.
@@ -170,43 +271,112 @@ func analyzeSigningInfo(signing *SigningInfo) []Finding {
 	var findings []Finding
 	now := time.Now()
 
+	// V1-only signing is weak — it does not protect against APK modifications.
+	if signing.Scheme == "v1" {
+		findings = append(findings, signingFinding(
+			"signing.v1_only", SeverityWarn, ConfidenceHigh,
+			"APK uses v1 (JAR) signing only — vulnerable to modification without invalidating signature",
+			"signing.scheme", signing.Scheme,
+			"signing.v1_only",
+		))
+	}
+
 	for _, cert := range signing.Certificates {
 		// Detect debug/self-signed certificates.
 		if isDebugCert(cert) {
-			findings = append(findings, Finding{
-				ID:         "signing.debug_cert",
-				Category:   "signing",
-				Severity:   SeverityError,
-				Confidence: ConfidenceHigh,
-				Message:    fmt.Sprintf("signed with debug certificate (subject: %s) — not suitable for production", cert.Subject),
-				Evidence: []Evidence{{
-					Field:             "certificate.subject",
-					MatchedTextMasked: cert.Subject,
-				}},
-				Fingerprint: fingerprint("signing.debug", cert.SHA256Fingerprint),
-			})
+			findings = append(findings, signingFinding(
+				"signing.debug_cert", SeverityError, ConfidenceHigh,
+				fmt.Sprintf("signed with debug certificate (subject: %s) — not suitable for production", cert.Subject),
+				"certificate.subject", cert.Subject,
+				"signing.debug", cert.SHA256Fingerprint,
+			))
+		}
+
+		// Detect self-signed test certificates (not debug but still self-signed).
+		if cert.SelfSigned && !isDebugCert(cert) {
+			findings = append(findings, signingFinding(
+				"signing.self_signed_test_cert", SeverityWarn, ConfidenceMedium,
+				fmt.Sprintf("self-signed certificate (subject: %s) — may indicate a test build", cert.Subject),
+				"certificate.subject", cert.Subject,
+				"signing.self_signed", cert.SHA256Fingerprint,
+			))
+		}
+
+		// Detect weak signature digest algorithms.
+		if isWeakDigest(cert.SignatureAlgorithm) {
+			findings = append(findings, signingFinding(
+				"signing.weak_digest", SeverityWarn, ConfidenceHigh,
+				fmt.Sprintf("certificate uses weak signature algorithm: %s", cert.SignatureAlgorithm),
+				"certificate.signature_algorithm", cert.SignatureAlgorithm,
+				"signing.weak_digest", cert.SHA256Fingerprint,
+			))
+		}
+
+		// Detect weak key sizes.
+		if isWeakKeySize(cert.PublicKeyAlgorithm, cert.KeySize) {
+			findings = append(findings, signingFinding(
+				"signing.weak_key_size", SeverityWarn, ConfidenceHigh,
+				fmt.Sprintf("certificate uses weak key: %s %d-bit", cert.PublicKeyAlgorithm, cert.KeySize),
+				"certificate.key_size", fmt.Sprintf("%s %d", cert.PublicKeyAlgorithm, cert.KeySize),
+				"signing.weak_key", cert.SHA256Fingerprint,
+			))
 		}
 
 		// Detect expired certificates.
 		if cert.NotAfter != "" {
 			expiry, err := time.Parse(time.RFC3339, cert.NotAfter)
 			if err == nil && now.After(expiry) {
-				findings = append(findings, Finding{
-					ID:         fmt.Sprintf("signing.expired.%s", sanitizeFindingID(cert.SHA256Fingerprint)),
-					Category:   "signing",
-					Severity:   SeverityWarn,
-					Confidence: ConfidenceHigh,
-					Message:    fmt.Sprintf("signing certificate expired: %s (subject: %s)", cert.NotAfter, cert.Subject),
-					Evidence: []Evidence{{
-						Field:             "certificate.not_after",
-						MatchedTextMasked: cert.NotAfter,
-					}},
-					Fingerprint: fingerprint("signing.expired", cert.SHA256Fingerprint),
-				})
+				findings = append(findings, signingFinding(
+					fmt.Sprintf("signing.expired.%s", sanitizeFindingID(cert.SHA256Fingerprint)),
+					SeverityWarn, ConfidenceHigh,
+					fmt.Sprintf("signing certificate expired: %s (subject: %s)", cert.NotAfter, cert.Subject),
+					"certificate.not_after", cert.NotAfter,
+					"signing.expired", cert.SHA256Fingerprint,
+				))
 			}
 		}
 	}
+
+	// iOS provisioning profile expiration.
+	if signing.ProvisioningExpiresAt != "" {
+		expiry, err := time.Parse(time.RFC3339, signing.ProvisioningExpiresAt)
+		if err == nil && now.After(expiry) {
+			findings = append(findings, signingFinding(
+				"signing.provisioning_expired", SeverityWarn, ConfidenceHigh,
+				fmt.Sprintf("iOS provisioning profile expired: %s", signing.ProvisioningExpiresAt),
+				"provisioning.expires_at", signing.ProvisioningExpiresAt,
+				"signing.provisioning_expired",
+			))
+		}
+	}
+
 	return findings
+}
+
+// isWeakDigest returns true for signature algorithms using MD5 or SHA-1.
+func isWeakDigest(algo string) bool {
+	if algo == "" {
+		return false
+	}
+	lower := strings.ToLower(algo)
+	return strings.Contains(lower, "md5") || strings.Contains(lower, "md2") ||
+		(strings.Contains(lower, "sha1") || strings.Contains(lower, "sha-1"))
+}
+
+// isWeakKeySize returns true for key sizes considered too small.
+func isWeakKeySize(algo string, bits int) bool {
+	if bits == 0 {
+		return false
+	}
+	switch strings.ToUpper(algo) {
+	case "RSA":
+		return bits < 2048
+	case "ECDSA":
+		return bits < 256
+	case "DSA":
+		return bits < 2048
+	}
+	return false
 }
 
 // isDebugCert heuristically detects debug/development signing certificates.
@@ -436,29 +606,16 @@ func extractDeepLinkEndpoints(components []ExportedComponent) []NetworkEndpoint 
 	return endpoints
 }
 
-// secretPatterns defines regex patterns for detecting potential secrets.
-var secretPatterns = []struct {
-	kind       string
-	pattern    *regexp.Regexp
-	confidence Confidence
-}{
-	{"aws_key", regexp.MustCompile(`AKIA[0-9A-Z]{16}`), ConfidenceHigh},
-	{"github_token", regexp.MustCompile(`gh[pousr]_[A-Za-z0-9_]{36,}`), ConfidenceHigh},
-	{"api_key", regexp.MustCompile(`(?i)api[_-]?key\s*[=:]\s*["']?([A-Za-z0-9_\-]{20,})["']?`), ConfidenceMedium},
-	{"bearer_token", regexp.MustCompile(`Bearer\s+[A-Za-z0-9_\-\.]{20,}`), ConfidenceMedium},
-	{"generic_secret", regexp.MustCompile(`(?i)(?:secret|password|passwd|token)\s*[=:]\s*["']([^"']{8,})["']`), ConfidenceLow},
-}
-
 func scanSecretsInStrings(kvPairs map[string]string, source string) []SecretCandidate {
 	var candidates []SecretCandidate
 	for key, value := range kvPairs {
-		for _, sp := range secretPatterns {
-			if sp.pattern.MatchString(value) || sp.pattern.MatchString(key+"="+value) {
+		for _, sp := range secrets.Patterns {
+			if sp.Re.MatchString(value) || sp.Re.MatchString(key+"="+value) {
 				candidates = append(candidates, SecretCandidate{
-					Kind:        sp.kind,
+					Kind:        sp.Kind,
 					MaskedValue: maskSecret(value),
 					Source:      source,
-					Confidence:  sp.confidence,
+					Confidence:  Confidence(sp.Confidence),
 				})
 				break
 			}
@@ -468,27 +625,41 @@ func scanSecretsInStrings(kvPairs map[string]string, source string) []SecretCand
 }
 
 func scanSecretsInMap(m map[string]any, source string) []SecretCandidate {
-	flat := flattenMap(m, "")
+	flat := make(map[string]string)
+	walkStringLeaves(m, "", func(key, value string) {
+		flat[key] = value
+	})
 	return scanSecretsInStrings(flat, source)
 }
 
-func flattenMap(m map[string]any, prefix string) map[string]string {
-	result := make(map[string]string)
+// walkStringLeaves visits every string-typed leaf in a nested structure
+// of map[string]any, []any, and []string. The callback receives the
+// dotted key path and the string value.
+func walkStringLeaves(m map[string]any, prefix string, fn func(key, value string)) {
 	for k, v := range m {
 		key := k
 		if prefix != "" {
 			key = prefix + "." + k
 		}
-		switch val := v.(type) {
-		case string:
-			result[key] = val
-		case map[string]any:
-			for fk, fv := range flattenMap(val, key) {
-				result[fk] = fv
-			}
+		visitValue(key, v, fn)
+	}
+}
+
+func visitValue(key string, v any, fn func(key, value string)) {
+	switch val := v.(type) {
+	case string:
+		fn(key, val)
+	case map[string]any:
+		walkStringLeaves(val, key, fn)
+	case []any:
+		for i, item := range val {
+			visitValue(fmt.Sprintf("%s[%d]", key, i), item, fn)
+		}
+	case []string:
+		for i, elem := range val {
+			fn(fmt.Sprintf("%s[%d]", key, i), elem)
 		}
 	}
-	return result
 }
 
 func maskSecret(value string) string {
@@ -519,4 +690,161 @@ func sanitizeFindingID(s string) string {
 		}
 		return '.'
 	}, s)
+}
+
+// analyzeNSCPolicy generates findings from the parsed network security config.
+func analyzeNSCPolicy(r report) []Finding {
+	if r.Platform != PlatformAndroid || r.NSCPolicy == nil {
+		return nil
+	}
+	var findings []Finding
+	nsc := r.NSCPolicy
+
+	// Base config allows cleartext.
+	if nsc.CleartextPermitted {
+		findings = append(findings, Finding{
+			ID:         "nsc.base_config_cleartext",
+			Category:   "cleartext",
+			Severity:   SeverityWarn,
+			Confidence: ConfidenceHigh,
+			Message:    "network security config base-config permits cleartext traffic",
+			Evidence: []Evidence{{
+				ArchivePath: "network_security_config.xml",
+				Field:       "base-config[@cleartextTrafficPermitted]",
+			}},
+			Fingerprint: fingerprint("nsc", "base_config_cleartext"),
+		})
+	}
+
+	// Domain configs that allow cleartext.
+	for _, dc := range nsc.DomainConfigs {
+		findings = append(findings, analyzeNSCDomainConfig(dc)...)
+	}
+
+	// Debug overrides present.
+	if nsc.HasDebugOverrides {
+		findings = append(findings, Finding{
+			ID:         "nsc.debug_overrides",
+			Category:   "cleartext",
+			Severity:   SeverityWarn,
+			Confidence: ConfidenceHigh,
+			Message:    "network security config contains debug-overrides — may weaken TLS validation in debug builds",
+			Evidence: []Evidence{{
+				ArchivePath: "network_security_config.xml",
+				Field:       "debug-overrides",
+			}},
+			Fingerprint: fingerprint("nsc", "debug_overrides"),
+		})
+	}
+
+	return findings
+}
+
+// analyzeNSCDomainConfig recursively generates findings from domain-configs.
+func analyzeNSCDomainConfig(dc DomainConfig) []Finding {
+	var findings []Finding
+	if dc.CleartextPermitted && len(dc.Domains) > 0 {
+		domains := strings.Join(dc.Domains, ", ")
+		findings = append(findings, Finding{
+			ID:         fmt.Sprintf("nsc.domain_cleartext.%s", sanitizeFindingID(dc.Domains[0])),
+			Category:   "cleartext",
+			Severity:   SeverityWarn,
+			Confidence: ConfidenceHigh,
+			Message:    fmt.Sprintf("network security config permits cleartext traffic for: %s", domains),
+			Evidence: []Evidence{{
+				ArchivePath:       "network_security_config.xml",
+				Field:             "domain-config[@cleartextTrafficPermitted]",
+				MatchedTextMasked: domains,
+			}},
+			Fingerprint: fingerprint("nsc", "domain_cleartext", dc.Domains[0]),
+		})
+	}
+	for _, nested := range dc.NestedConfigs {
+		findings = append(findings, analyzeNSCDomainConfig(nested)...)
+	}
+	return findings
+}
+
+// analyzeIOSATS generates findings from iOS App Transport Security settings.
+func analyzeIOSATS(r report) []Finding {
+	if r.Platform != PlatformIOS {
+		return nil
+	}
+	ir, ok := asIOS(r)
+	if !ok || ir.InfoPlist == nil {
+		return nil
+	}
+
+	ats, ok := ir.InfoPlist["NSAppTransportSecurity"].(map[string]any)
+	if !ok {
+		return nil
+	}
+
+	var findings []Finding
+
+	// NSAllowsArbitraryLoads = true disables ATS entirely.
+	if arbitrary, ok := ats["NSAllowsArbitraryLoads"]; ok {
+		if b, ok := arbitrary.(bool); ok && b {
+			findings = append(findings, Finding{
+				ID:         "ios.ats_arbitrary_loads",
+				Category:   "cleartext",
+				Severity:   SeverityWarn,
+				Confidence: ConfidenceHigh,
+				Message:    "NSAllowsArbitraryLoads is true — App Transport Security is disabled, cleartext HTTP allowed",
+				Evidence: []Evidence{{
+					ArchivePath: "Info.plist",
+					Field:       "NSAppTransportSecurity.NSAllowsArbitraryLoads",
+				}},
+				Fingerprint: fingerprint("ios", "ats_arbitrary_loads"),
+			})
+		}
+	}
+
+	// Check exception domains for insecure settings.
+	if domains, ok := ats["NSExceptionDomains"].(map[string]any); ok {
+		for domain, config := range domains {
+			domainCfg, ok := config.(map[string]any)
+			if !ok {
+				continue
+			}
+			// NSExceptionAllowsInsecureHTTPLoads = true
+			if v, ok := domainCfg["NSExceptionAllowsInsecureHTTPLoads"]; ok {
+				if b, ok := v.(bool); ok && b {
+					findings = append(findings, Finding{
+						ID:         fmt.Sprintf("ios.ats_insecure_domain.%s", sanitizeFindingID(domain)),
+						Category:   "cleartext",
+						Severity:   SeverityWarn,
+						Confidence: ConfidenceHigh,
+						Message:    fmt.Sprintf("ATS exception allows insecure HTTP for domain: %s", domain),
+						Evidence: []Evidence{{
+							ArchivePath:       "Info.plist",
+							Field:             "NSExceptionDomains." + domain + ".NSExceptionAllowsInsecureHTTPLoads",
+							MatchedTextMasked: domain,
+						}},
+						Fingerprint: fingerprint("ios", "ats_insecure", domain),
+					})
+				}
+			}
+			// NSTemporaryExceptionAllowsInsecureHTTPLoads (legacy key)
+			if v, ok := domainCfg["NSTemporaryExceptionAllowsInsecureHTTPLoads"]; ok {
+				if b, ok := v.(bool); ok && b {
+					findings = append(findings, Finding{
+						ID:         fmt.Sprintf("ios.ats_insecure_domain.%s", sanitizeFindingID(domain)),
+						Category:   "cleartext",
+						Severity:   SeverityWarn,
+						Confidence: ConfidenceHigh,
+						Message:    fmt.Sprintf("ATS temporary exception allows insecure HTTP for domain: %s", domain),
+						Evidence: []Evidence{{
+							ArchivePath:       "Info.plist",
+							Field:             "NSExceptionDomains." + domain + ".NSTemporaryExceptionAllowsInsecureHTTPLoads",
+							MatchedTextMasked: domain,
+						}},
+						Fingerprint: fingerprint("ios", "ats_insecure", domain),
+					})
+				}
+			}
+		}
+	}
+
+	return findings
 }

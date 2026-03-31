@@ -78,7 +78,7 @@ func (r *dangerousAPIsRule) Match(ctx *Context) []Finding {
 	var findings []Finding
 
 	for _, dt := range dangerousTargets {
-		if dt.severity == "info" {
+		if dt.severity == sevInfo {
 			findings = append(findings, matchAggregated(ctx, dt)...)
 		} else {
 			findings = append(findings, matchPerCallsite(ctx, dt)...)
@@ -105,17 +105,7 @@ func matchPerCallsite(ctx *Context, dt dangerousTarget) []Finding {
 			}
 			seen[key] = struct{}{}
 
-			severity := dt.severity
-			confidence := "high"
-			msg := fmt.Sprintf("%s (in %s)", dt.message, cs.CallerClass)
-
-			if isKnownLibraryClass(cs.CallerClass) {
-				if severity == "error" {
-					severity = "warn"
-				}
-				confidence = "medium"
-				msg = fmt.Sprintf("%s (in library %s)", dt.message, cs.CallerClass)
-			}
+			severity, confidence, msg := adjustForLibrary(cs.CallerClass, dt.severity, dt.message)
 
 			findings = append(findings, Finding{
 				ID:          fmt.Sprintf("dex.api.%s.%s.%s", sanitizeID(dt.class), dt.method, sanitizeID(cs.CallerClass)),
@@ -173,7 +163,7 @@ func matchAggregated(ctx *Context, dt dangerousTarget) []Finding {
 		ID:          fmt.Sprintf("dex.api.%s.%s", sanitizeID(dt.class), dt.method),
 		Category:    "dex_dangerous_api",
 		Severity:    dt.severity,
-		Confidence:  "high",
+		Confidence:  confHigh,
 		Message:     msg,
 		ArchivePath: firstCall.archivePath,
 		Field:       fmt.Sprintf("%s->%s", firstCall.callerClass, firstCall.callerMethod),
