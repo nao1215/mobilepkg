@@ -108,7 +108,7 @@ func (r *insecureWebViewRule) Match(ctx *Context) []Finding {
 			if _, ok := seen[key]; ok {
 				continue
 			}
-			if url := getPrecedingConstString(df, cs); url != "" && strings.HasPrefix(url, "http://") {
+			if url := getPrecedingConstString(df, cs); url != "" && strings.HasPrefix(strings.ToLower(url), "http://") {
 				seen[key] = struct{}{}
 				findings = append(findings, Finding{
 					ID:          fmt.Sprintf("dex.webview.loadUrl_http.%s", sanitizeID(cs.CallerClass)),
