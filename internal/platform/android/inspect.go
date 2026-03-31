@@ -128,6 +128,11 @@ func Inspect(zr *zip.Reader, sections uint64, r io.ReaderAt, size int64, maxEntr
 	if sections&(1<<bitIdentity) != 0 {
 		result.PackageName = manifest.Package
 		result.Label = resolveString(manifest.App.Label, resourceTable)
+		// If the label is still an unresolved resource reference, fall
+		// back to the package name so that the display name is readable.
+		if strings.HasPrefix(result.Label, "@0x") {
+			result.Label = manifest.Package
+		}
 	}
 
 	// Version
