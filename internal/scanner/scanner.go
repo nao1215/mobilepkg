@@ -7,6 +7,17 @@ import (
 	"github.com/nao1215/mobilepkg/internal/dex"
 )
 
+// Severity and confidence string constants used across scanner rules.
+const (
+	sevError = "error"
+	sevWarn  = "warn"
+	sevInfo  = "info"
+
+	confHigh   = "high"
+	confMedium = "medium"
+	confLow    = "low"
+)
+
 // Finding represents a security observation from a scanner rule.
 // Fields use plain types to avoid circular imports with the root package.
 type Finding struct {

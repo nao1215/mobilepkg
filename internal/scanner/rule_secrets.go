@@ -1,6 +1,7 @@
 package scanner
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"regexp"
 	"strings"
@@ -18,6 +19,9 @@ type secretPattern struct {
 	confidence string
 }
 
+// dexSecretPatterns is the unified set of secret patterns used for DEX string
+// scanning. It mirrors the patterns in the root analyze.go secretPatterns to
+// ensure consistent detection across manifest/plist and DEX sources.
 var dexSecretPatterns = []secretPattern{
 	{"aws_key", regexp.MustCompile(`AKIA[0-9A-Z]{16}`), "error", "high"},
 	{"gcp_api_key", regexp.MustCompile(`AIza[0-9A-Za-z_\-]{35}`), "error", "high"},
@@ -64,8 +68,12 @@ func (r *hardcodedSecretsRule) Match(ctx *Context) []Finding {
 				}
 				seen[match] = struct{}{}
 
+				// Use hash-based ID instead of raw secret prefix.
+				h := sha256.Sum256([]byte(match))
+				hashID := fmt.Sprintf("%x", h[:6])
+
 				findings = append(findings, Finding{
-					ID:          fmt.Sprintf("dex.secret.%s.%s", sp.kind, sanitizeID(match[:min(len(match), 12)])),
+					ID:          fmt.Sprintf("dex.secret.%s.%s", sp.kind, hashID),
 					Category:    "dex_secret",
 					Severity:    sp.severity,
 					Confidence:  sp.confidence,
