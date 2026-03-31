@@ -339,6 +339,26 @@ func analyzeSigningInfo(signing *SigningInfo) []Finding {
 			}
 		}
 	}
+
+	// iOS provisioning profile expiration.
+	if signing.ProvisioningExpiresAt != "" {
+		expiry, err := time.Parse(time.RFC3339, signing.ProvisioningExpiresAt)
+		if err == nil && now.After(expiry) {
+			findings = append(findings, Finding{
+				ID:         "signing.provisioning_expired",
+				Category:   "signing",
+				Severity:   SeverityWarn,
+				Confidence: ConfidenceHigh,
+				Message:    fmt.Sprintf("iOS provisioning profile expired: %s", signing.ProvisioningExpiresAt),
+				Evidence: []Evidence{{
+					Field:             "provisioning.expires_at",
+					MatchedTextMasked: signing.ProvisioningExpiresAt,
+				}},
+				Fingerprint: fingerprint("signing.provisioning_expired"),
+			})
+		}
+	}
+
 	return findings
 }
 

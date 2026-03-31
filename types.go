@@ -230,6 +230,9 @@ type SigningInfo struct {
 	Scheme string `json:"scheme"`
 	// Certificates lists the signing certificates found.
 	Certificates []CertSummary `json:"certificates,omitempty"`
+	// ProvisioningExpiresAt is the provisioning profile expiration date
+	// in RFC 3339 format (iOS only). Empty for Android or when unknown.
+	ProvisioningExpiresAt string `json:"provisioning_expires_at,omitempty"`
 }
 
 // CertSummary holds a summary of an X.509 certificate used for code signing.

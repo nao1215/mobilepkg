@@ -568,7 +568,10 @@ func inspectIOS(zr *zip.Reader, sections section, maxEntryBytes int64) (report, 
 	}
 
 	if sections&sectionSigning != 0 && result.Signing != nil {
-		si := &SigningInfo{Scheme: "apple"}
+		si := &SigningInfo{
+			Scheme:                "apple",
+			ProvisioningExpiresAt: result.Signing.ExpiresAt,
+		}
 		for _, c := range result.Signing.Certs {
 			si.Certificates = append(si.Certificates, CertSummary{
 				Subject:            c.Subject,
