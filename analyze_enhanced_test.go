@@ -50,6 +50,24 @@ func TestFlattenMap_ArraysTraversed(t *testing.T) {
 	assert.Contains(t, flat, "items[1].nested_token")
 }
 
+func TestFlattenMap_TypedStringSlice(t *testing.T) {
+	t.Parallel()
+
+	// Android raw manifest stores permission arrays as []string, not []any.
+	m := map[string]any{
+		"permissions": []string{
+			"android.permission.INTERNET",
+			"android.permission.CAMERA",
+		},
+	}
+
+	flat := flattenMap(m, "")
+	assert.Contains(t, flat, "permissions[0]")
+	assert.Equal(t, "android.permission.INTERNET", flat["permissions[0]"])
+	assert.Contains(t, flat, "permissions[1]")
+	assert.Equal(t, "android.permission.CAMERA", flat["permissions[1]"])
+}
+
 func TestScanSecretsInMap_PlistArraySecrets(t *testing.T) {
 	t.Parallel()
 
@@ -411,6 +429,37 @@ func TestAnalyzeSigningInfo_ExpiredCert(t *testing.T) {
 		}
 	}
 	assert.True(t, hasExpired)
+}
+
+func TestAnalyzeSigningInfo_ProvisioningExpired(t *testing.T) {
+	t.Parallel()
+
+	signing := &SigningInfo{
+		Scheme:                "apple",
+		ProvisioningExpiresAt: time.Date(2020, 6, 1, 0, 0, 0, 0, time.UTC).Format(time.RFC3339),
+	}
+
+	findings := analyzeSigningInfo(signing)
+	ids := map[string]bool{}
+	for _, f := range findings {
+		ids[f.ID] = true
+	}
+	assert.True(t, ids["signing.provisioning_expired"],
+		"should detect expired provisioning profile")
+}
+
+func TestAnalyzeSigningInfo_ProvisioningNotExpired(t *testing.T) {
+	t.Parallel()
+
+	signing := &SigningInfo{
+		Scheme:                "apple",
+		ProvisioningExpiresAt: time.Date(2099, 6, 1, 0, 0, 0, 0, time.UTC).Format(time.RFC3339),
+	}
+
+	findings := analyzeSigningInfo(signing)
+	for _, f := range findings {
+		assert.NotEqual(t, "signing.provisioning_expired", f.ID)
+	}
 }
 
 // --- Exported component priority tests ---

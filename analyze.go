@@ -682,6 +682,10 @@ func flattenMap(m map[string]any, prefix string) map[string]string {
 					}
 				}
 			}
+		case []string:
+			for i, elem := range val {
+				result[fmt.Sprintf("%s[%d]", key, i)] = elem
+			}
 		}
 	}
 	return result
