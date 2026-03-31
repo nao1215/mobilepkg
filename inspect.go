@@ -259,15 +259,19 @@ func extractReportFromReader(ctx context.Context, r io.ReaderAt, size int64, opt
 	iconOpts := iconOptions{}
 	maxEntry := limits.MaxSingleEntryUncompressedBytes
 
+	innerValidator := android.InnerArchiveValidator(func(inner *zip.Reader) error {
+		return validateArchive(inner, 0, limits, 1)
+	})
+
 	var rpt report
 
 	switch probe.Platform {
 	case PlatformAndroid:
 		switch probe.Format {
 		case FormatXAPK:
-			rpt, err = inspectXAPK(zr, sections, maxEntry)
+			rpt, err = inspectXAPK(zr, sections, maxEntry, innerValidator)
 		case FormatAPKS:
-			rpt, err = inspectAPKS(zr, sections, maxEntry)
+			rpt, err = inspectAPKS(zr, sections, maxEntry, innerValidator)
 		case FormatAAB:
 			rpt, err = inspectAAB(r, size, sections, iconOpts, maxEntry)
 		default:
@@ -469,8 +473,8 @@ func inspectAndroid(zr *zip.Reader, sections section, r io.ReaderAt, size int64,
 }
 
 // inspectXAPK delegates to the Android XAPK adapter.
-func inspectXAPK(zr *zip.Reader, sections section, maxEntryBytes int64) (report, error) {
-	result, diags, err := android.InspectXAPK(zr, uint64(sections), maxEntryBytes)
+func inspectXAPK(zr *zip.Reader, sections section, maxEntryBytes int64, validate android.InnerArchiveValidator) (report, error) {
+	result, diags, err := android.InspectXAPK(zr, uint64(sections), maxEntryBytes, validate)
 	if err != nil {
 		return report{}, err
 	}
@@ -478,8 +482,8 @@ func inspectXAPK(zr *zip.Reader, sections section, maxEntryBytes int64) (report,
 }
 
 // inspectAPKS delegates to the Android APKS adapter.
-func inspectAPKS(zr *zip.Reader, sections section, maxEntryBytes int64) (report, error) {
-	result, diags, err := android.InspectAPKS(zr, uint64(sections), maxEntryBytes)
+func inspectAPKS(zr *zip.Reader, sections section, maxEntryBytes int64, validate android.InnerArchiveValidator) (report, error) {
+	result, diags, err := android.InspectAPKS(zr, uint64(sections), maxEntryBytes, validate)
 	if err != nil {
 		return report{}, err
 	}

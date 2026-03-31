@@ -133,7 +133,7 @@ func TestInspectXAPK_FallbackAndMerge(t *testing.T) {
 		"base.apk":      innerAPK,
 	})
 
-	result, diags, err := InspectXAPK(zr, (1<<0)|(1<<1)|(1<<3)|(1<<5), 1<<20)
+	result, diags, err := InspectXAPK(zr, (1<<0)|(1<<1)|(1<<3)|(1<<5), 1<<20, nil)
 	if err != nil {
 		t.Fatalf("InspectXAPK: %v", err)
 	}
@@ -204,7 +204,7 @@ func TestInspectAPKSAndNestedZip(t *testing.T) {
 			"splits/base-master.apk": innerAPK,
 		})
 
-		inner, err := findBaseMasterAPK(zr, 1<<20)
+		inner, err := findBaseMasterAPK(zr, 1<<20, nil)
 		if err != nil {
 			t.Fatalf("findBaseMasterAPK: %v", err)
 		}
@@ -212,7 +212,7 @@ func TestInspectAPKSAndNestedZip(t *testing.T) {
 			t.Fatal("inner archive is empty")
 		}
 
-		if _, _, err := InspectAPKS(zr, 0xFF, 1<<20); err == nil {
+		if _, _, err := InspectAPKS(zr, 0xFF, 1<<20, nil); err == nil {
 			t.Fatal("InspectAPKS error = nil, want parse error from inner APK")
 		}
 	})
@@ -222,7 +222,7 @@ func TestInspectAPKSAndNestedZip(t *testing.T) {
 			"universal.apk": innerAPK,
 		})
 
-		if _, err := findBaseMasterAPK(zr, 1<<20); err != nil {
+		if _, err := findBaseMasterAPK(zr, 1<<20, nil); err != nil {
 			t.Fatalf("findBaseMasterAPK(universal): %v", err)
 		}
 	})
@@ -242,7 +242,7 @@ func TestInspectAPKSAndNestedZip(t *testing.T) {
 			"base.apk": innerAPK,
 		})
 
-		if _, err := findNestedAPK(zr, []string{"missing.apk"}, 1<<20); err == nil {
+		if _, err := findNestedAPK(zr, []string{"missing.apk"}, 1<<20, nil); err == nil {
 			t.Fatal("findNestedAPK error = nil, want not found error")
 		}
 	})

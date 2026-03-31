@@ -8,9 +8,10 @@ import (
 
 // InspectAPKS extracts information from an APKS (bundletool output) archive.
 // It locates the base-master split APK and delegates to the standard APK
-// inspector for full analysis.
-func InspectAPKS(zr *zip.Reader, sections uint64, maxEntryBytes int64) (*Result, []Diagnostic, error) {
-	baseZR, err := findBaseMasterAPK(zr, maxEntryBytes)
+// inspector for full analysis. If validate is non-nil, it is called on
+// the inner base APK archive before parsing.
+func InspectAPKS(zr *zip.Reader, sections uint64, maxEntryBytes int64, validate InnerArchiveValidator) (*Result, []Diagnostic, error) {
+	baseZR, err := findBaseMasterAPK(zr, maxEntryBytes, validate)
 	if err != nil {
 		return nil, nil, fmt.Errorf("android/apks: %w", err)
 	}
@@ -18,26 +19,20 @@ func InspectAPKS(zr *zip.Reader, sections uint64, maxEntryBytes int64) (*Result,
 }
 
 // findBaseMasterAPK locates the base APK within an APKS archive.
-// It tries well-known paths in order of likelihood.
-func findBaseMasterAPK(zr *zip.Reader, maxEntryBytes int64) (*zip.Reader, error) {
-	// Primary: exact name used by bundletool
-	if inner, err := openNestedZip(zr, "splits/base-master.apk", maxEntryBytes); err == nil {
-		return inner, nil
-	}
+// It tries well-known paths in order of likelihood. If validate is
+// non-nil, it is called on the inner archive before returning it.
+func findBaseMasterAPK(zr *zip.Reader, maxEntryBytes int64, validate InnerArchiveValidator) (*zip.Reader, error) {
+	candidates := []string{"splits/base-master.apk"}
 
 	// Fallback: any base*.apk in splits/
 	for _, f := range zr.File {
 		if strings.HasPrefix(f.Name, "splits/base") && strings.HasSuffix(f.Name, ".apk") {
-			if inner, err := openNestedZip(zr, f.Name, maxEntryBytes); err == nil {
-				return inner, nil
-			}
+			candidates = append(candidates, f.Name)
 		}
 	}
 
 	// Last resort: universal.apk (bundletool --mode=universal output)
-	if inner, err := openNestedZip(zr, "universal.apk", maxEntryBytes); err == nil {
-		return inner, nil
-	}
+	candidates = append(candidates, "universal.apk")
 
-	return nil, fmt.Errorf("no base APK found in APKS archive")
+	return findNestedAPK(zr, candidates, maxEntryBytes, validate)
 }

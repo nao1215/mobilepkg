@@ -24,7 +24,9 @@ type xapkManifest struct {
 // InspectXAPK extracts information from an XAPK archive.
 // It parses manifest.json for quick metadata and delegates to the standard
 // APK inspector for deeper analysis of the base APK inside.
-func InspectXAPK(zr *zip.Reader, sections uint64, maxEntryBytes int64) (*Result, []Diagnostic, error) {
+// If validate is non-nil, it is called on the inner base APK archive
+// before parsing its manifest and resources.
+func InspectXAPK(zr *zip.Reader, sections uint64, maxEntryBytes int64, validate InnerArchiveValidator) (*Result, []Diagnostic, error) {
 	manifestData, err := readZipFile(zr, "manifest.json", maxEntryBytes)
 	if err != nil {
 		return nil, nil, fmt.Errorf("android/xapk: %w", err)
@@ -36,7 +38,7 @@ func InspectXAPK(zr *zip.Reader, sections uint64, maxEntryBytes int64) (*Result,
 	}
 
 	// Try to find and open the base APK for deeper inspection.
-	baseZR, baseErr := findXAPKBaseAPK(zr, xm, maxEntryBytes)
+	baseZR, baseErr := findXAPKBaseAPK(zr, xm, maxEntryBytes, validate)
 	if baseErr == nil {
 		innerResult, innerDiags, innerErr := Inspect(baseZR, sections, nil, 0, maxEntryBytes)
 		if innerErr == nil {
@@ -50,7 +52,7 @@ func InspectXAPK(zr *zip.Reader, sections uint64, maxEntryBytes int64) (*Result,
 }
 
 // findXAPKBaseAPK locates the base APK inside an XAPK archive.
-func findXAPKBaseAPK(zr *zip.Reader, xm xapkManifest, maxEntryBytes int64) (*zip.Reader, error) {
+func findXAPKBaseAPK(zr *zip.Reader, xm xapkManifest, maxEntryBytes int64, validate InnerArchiveValidator) (*zip.Reader, error) {
 	var candidates []string
 
 	// v2: look at split_apks for the base entry
@@ -73,7 +75,7 @@ func findXAPKBaseAPK(zr *zip.Reader, xm xapkManifest, maxEntryBytes int64) (*zip
 		}
 	}
 
-	return findNestedAPK(zr, candidates, maxEntryBytes)
+	return findNestedAPK(zr, candidates, maxEntryBytes, validate)
 }
 
 // mergeXAPKMetadata fills in any fields that the base APK inspection

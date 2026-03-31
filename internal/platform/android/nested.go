@@ -24,11 +24,17 @@ func openNestedZip(zr *zip.Reader, name string, maxBytes int64) (*zip.Reader, er
 }
 
 // findNestedAPK searches for the first APK file matching any of the given
-// candidate names and returns a *zip.Reader for it.
-func findNestedAPK(zr *zip.Reader, candidates []string, maxBytes int64) (*zip.Reader, error) {
+// candidate names and returns a *zip.Reader for it. If validate is
+// non-nil, it is called on the inner archive before returning it.
+func findNestedAPK(zr *zip.Reader, candidates []string, maxBytes int64, validate InnerArchiveValidator) (*zip.Reader, error) {
 	for _, name := range candidates {
 		inner, err := openNestedZip(zr, name, maxBytes)
 		if err == nil {
+			if validate != nil {
+				if vErr := validate(inner); vErr != nil {
+					return nil, fmt.Errorf("nested zip %q: validation failed: %w", name, vErr)
+				}
+			}
 			return inner, nil
 		}
 	}
@@ -41,6 +47,12 @@ type NamedZipReader struct {
 	Name   string
 	Reader *zip.Reader
 }
+
+// InnerArchiveValidator is a callback that validates an inner zip.Reader
+// before it is used for parsing. The caller provides an implementation
+// that applies archive safety checks (entry count, paths, compression
+// ratio, etc.). A nil validator means no validation is performed.
+type InnerArchiveValidator func(zr *zip.Reader) error
 
 // maxInnerAPKs is the maximum number of inner APK entries that
 // OpenAllInnerAPKs will process. This prevents a crafted bundle with
