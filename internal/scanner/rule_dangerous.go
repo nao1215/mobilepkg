@@ -190,24 +190,33 @@ type callInfo struct {
 }
 
 // knownLibraryPrefixes lists package prefixes for well-known third-party
-// libraries and framework code. When a dangerous API call originates from
-// one of these packages, it is typically expected behavior (e.g. crash
-// reporters calling Runtime.exec to collect system info) rather than an
-// application-level vulnerability.
+// libraries and SDK code that are clearly not application-level code.
+//
+// Broad vendor prefixes (Lcom/google/, Lcom/facebook/, Lorg/chromium/)
+// are intentionally excluded because they would also match first-party
+// app code from those vendors, causing false severity downgrades.
+// Only specific SDK sub-packages are listed.
 var knownLibraryPrefixes = []string{
+	// Android Jetpack / support libraries
 	"Landroidx/",
-	"Lcom/google/",
+	// Google SDKs (not first-party app code)
+	"Lcom/google/firebase/",
+	"Lcom/google/android/gms/",
+	"Lcom/google/android/material/",
+	"Lcom/google/android/play/",
+	// Crash reporters
 	"Lorg/acra/",
-	"Lcom/squareup/",
-	"Lcom/bumptech/",
-	"Lokhttp3/",
-	"Lretrofit2/",
-	"Lio/reactivex/",
-	"Lkotlinx/",
-	"Lcom/facebook/",
 	"Lcom/crashlytics/",
 	"Lio/sentry/",
-	"Lorg/chromium/",
+	// Networking / serialization libraries
+	"Lcom/squareup/",
+	"Lokhttp3/",
+	"Lretrofit2/",
+	// Image loading
+	"Lcom/bumptech/",
+	// Reactive / coroutines
+	"Lio/reactivex/",
+	"Lkotlinx/",
 }
 
 // isKnownLibraryClass returns true if the caller class belongs to a

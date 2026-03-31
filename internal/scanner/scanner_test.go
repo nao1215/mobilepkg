@@ -173,7 +173,6 @@ func TestCleartextTraffic_ImplausibleHostExcluded(t *testing.T) {
 
 	df := buildTestDEXWithStrings(t, []string{
 		"http://wifi-not-enabled",
-		"http://some-internal-name/path",
 		"http://www./something",
 	})
 
@@ -182,6 +181,21 @@ func TestCleartextTraffic_ImplausibleHostExcluded(t *testing.T) {
 	findings := rule.Match(ctx)
 
 	assert.Empty(t, findings, "implausible hostnames should be excluded")
+}
+
+func TestCleartextTraffic_SingleLabelHostKept(t *testing.T) {
+	t.Parallel()
+
+	df := buildTestDEXWithStrings(t, []string{
+		"http://intranet/admin",
+		"http://metadata/latest",
+	})
+
+	ctx := &Context{DexFiles: []*dex.File{df}}
+	rule := &cleartextTrafficRule{}
+	findings := rule.Match(ctx)
+
+	assert.Len(t, findings, 2, "single-label hostnames should be reported")
 }
 
 func TestIsPlausibleHostname(t *testing.T) {
@@ -194,10 +208,12 @@ func TestIsPlausibleHostname(t *testing.T) {
 		{"example.com", true},
 		{"api.example.com", true},
 		{"t.co", true},
+		{"intranet", true},
+		{"metadata", true},
+		{"api", true},
 		{"wifi-not-enabled", false},
 		{"www.", false},
 		{"", false},
-		{"localhost", false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.host, func(t *testing.T) {
@@ -216,9 +232,15 @@ func TestIsKnownLibraryClass(t *testing.T) {
 		expected bool
 	}{
 		{"ACRA collector", "Lorg/acra/collector/MemoryInfoCollector;", true},
-		{"Google library", "Lcom/google/vr/dynamite/client/DynamiteClient;", true},
+		{"Firebase SDK", "Lcom/google/firebase/messaging/FirebaseMessagingService;", true},
+		{"Google Play Services", "Lcom/google/android/gms/common/GoogleApiClient;", true},
 		{"AndroidX", "Landroidx/work/impl/background/systemjob/SystemJobService;", true},
-		{"Chromium", "Lorg/chromium/base/BundleUtils;", true},
+		{"Sentry", "Lio/sentry/android/core/SentryAndroid;", true},
+		// Broad vendor prefixes must NOT match — they include first-party app code.
+		{"Google VR (first-party)", "Lcom/google/vr/dynamite/client/DynamiteClient;", false},
+		{"Chromium base (first-party)", "Lorg/chromium/base/BundleUtils;", false},
+		{"Facebook app code", "Lcom/facebook/appevents/AppEventsLogger;", false},
+		// Clearly app-level code.
 		{"App code", "Lcom/example/myapp/MainActivity;", false},
 		{"OWASP test app", "Lowasp/sat/agoat/RootDetectionActivity;", false},
 		{"Obfuscated class", "Lq07;", false},
