@@ -396,8 +396,13 @@ func extractEndpointsFromEntitlements(entitlements map[string]any) []NetworkEndp
 // data specifications in exported components. Deep links declared via
 // intent-filters are security-relevant because they expose the app to
 // external URI invocations.
+//
+// The function deduplicates entries by normalized scheme+host+path and
+// skips entries that have no meaningful host (e.g. scheme-only or wildcard).
 func extractDeepLinkEndpoints(components []ExportedComponent) []NetworkEndpoint {
 	var endpoints []NetworkEndpoint
+	seen := make(map[string]struct{})
+
 	for _, ec := range components {
 		for _, f := range ec.IntentFilters {
 			for _, d := range f.Data {
@@ -405,9 +410,19 @@ func extractDeepLinkEndpoints(components []ExportedComponent) []NetworkEndpoint 
 					continue
 				}
 				host := d.Host
-				if host == "" {
-					host = "(deep link)"
+				if host == "" || host == "*" {
+					// Scheme-only entries (no host) and wildcard hosts
+					// are not meaningful as network endpoints.
+					continue
 				}
+
+				scheme := strings.ToLower(d.Scheme)
+				key := scheme + "://" + strings.ToLower(host) + d.Path
+				if _, ok := seen[key]; ok {
+					continue
+				}
+				seen[key] = struct{}{}
+
 				endpoints = append(endpoints, NetworkEndpoint{
 					Scheme:     d.Scheme,
 					Host:       host,

@@ -168,6 +168,94 @@ func TestDefaultRules(t *testing.T) {
 	assert.Contains(t, names, "DangerousAPIs")
 }
 
+func TestCleartextTraffic_ImplausibleHostExcluded(t *testing.T) {
+	t.Parallel()
+
+	df := buildTestDEXWithStrings(t, []string{
+		"http://wifi-not-enabled",
+		"http://www./something",
+	})
+
+	ctx := &Context{DexFiles: []*dex.File{df}}
+	rule := &cleartextTrafficRule{}
+	findings := rule.Match(ctx)
+
+	assert.Empty(t, findings, "implausible hostnames should be excluded")
+}
+
+func TestCleartextTraffic_SingleLabelHostKept(t *testing.T) {
+	t.Parallel()
+
+	df := buildTestDEXWithStrings(t, []string{
+		"http://intranet/admin",
+		"http://metadata/latest",
+	})
+
+	ctx := &Context{DexFiles: []*dex.File{df}}
+	rule := &cleartextTrafficRule{}
+	findings := rule.Match(ctx)
+
+	assert.Len(t, findings, 2, "single-label hostnames should be reported")
+}
+
+func TestIsPlausibleHostname(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		host     string
+		expected bool
+	}{
+		{"example.com", true},
+		{"api.example.com", true},
+		{"t.co", true},
+		{"intranet", true},
+		{"metadata", true},
+		{"api", true},
+		{"wifi-not-enabled", false},
+		{"www.", false},
+		{"", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.host, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, tt.expected, isPlausibleHostname(tt.host))
+		})
+	}
+}
+
+func TestIsKnownLibraryClass(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		class    string
+		expected bool
+	}{
+		{"ACRA collector", "Lorg/acra/collector/MemoryInfoCollector;", true},
+		{"Firebase SDK", "Lcom/google/firebase/messaging/FirebaseMessagingService;", true},
+		{"Google Play Services", "Lcom/google/android/gms/common/GoogleApiClient;", true},
+		{"AndroidX", "Landroidx/work/impl/background/systemjob/SystemJobService;", true},
+		{"Sentry", "Lio/sentry/android/core/SentryAndroid;", true},
+		{"AWS SDK", "Lcom/amazonaws/services/s3/AmazonS3Client;", true},
+		{"Microsoft SDK", "Lcom/microsoft/identity/client/PublicClientApplication;", true},
+		// Broad vendor prefixes must NOT match — they include first-party app code.
+		{"Google VR (first-party)", "Lcom/google/vr/dynamite/client/DynamiteClient;", false},
+		{"Chromium base (first-party)", "Lorg/chromium/base/BundleUtils;", false},
+		{"Facebook app code", "Lcom/facebook/appevents/AppEventsLogger;", false},
+		// Clearly app-level code.
+		{"App code", "Lcom/example/myapp/MainActivity;", false},
+		{"OWASP test app", "Lowasp/sat/agoat/RootDetectionActivity;", false},
+		{"Obfuscated class", "Lq07;", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, tt.expected, isKnownLibraryClass(tt.class))
+		})
+	}
+}
+
 func TestHardcodedSecrets_Deduplication(t *testing.T) {
 	t.Parallel()
 

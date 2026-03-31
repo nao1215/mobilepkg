@@ -20,7 +20,9 @@ var localhostHosts = map[string]struct{}{
 	"10.0.3.2":  {},
 }
 
-// commonFalsePositives filters out known non-URL strings that start with "http://".
+// cleartextExclusions filters out known non-URL strings that start with "http://".
+// These are XML namespace URIs, specification references, and example domains
+// that are not actual cleartext traffic destinations.
 var cleartextExclusions = []string{
 	"http://schemas.android.com",
 	"http://www.w3.org",
@@ -33,6 +35,12 @@ var cleartextExclusions = []string{
 	"http://www.apache.org",
 	"http://example.com",
 	"http://example.org",
+	"http://purl.org",
+	"http://json-schema.org",
+	"http://www.json.org",
+	"http://docs.oasis-open.org",
+	"http://relaxng.org",
+	"http://schemas.microsoft.com",
 }
 
 func (r *cleartextTrafficRule) Match(ctx *Context) []Finding {
@@ -62,6 +70,12 @@ func (r *cleartextTrafficRule) Match(ctx *Context) []Finding {
 			if _, ok := localhostHosts[host]; ok {
 				continue
 			}
+			// Skip hostnames that are not plausible domain names — they need
+			// at least two labels (e.g. "example.com"), not just "www." or
+			// a bare word without dots.
+			if !isPlausibleHostname(host) {
+				continue
+			}
 
 			if _, ok := seen[host]; ok {
 				continue
@@ -81,6 +95,34 @@ func (r *cleartextTrafficRule) Match(ctx *Context) []Finding {
 		}
 	}
 	return findings
+}
+
+// implausibleHosts are hostnames that appear in DEX string tables but are
+// clearly not network destinations (status messages, error labels, etc.).
+var implausibleHosts = map[string]struct{}{
+	"wifi-not-enabled": {},
+}
+
+// isPlausibleHostname returns true if the host could be a real network
+// destination. It filters out:
+//   - empty hostnames
+//   - trailing-dot fragments like "www." (incomplete domain)
+//   - known false-positive hostnames (e.g. "wifi-not-enabled")
+//
+// Single-label hostnames (e.g. "intranet", "metadata", "api") are kept
+// because they can be valid internal endpoints in mobile environments.
+func isPlausibleHostname(host string) bool {
+	if host == "" {
+		return false
+	}
+	// Trailing dot means an incomplete hostname fragment (e.g. "www.").
+	if strings.HasSuffix(host, ".") {
+		return false
+	}
+	if _, ok := implausibleHosts[host]; ok {
+		return false
+	}
+	return true
 }
 
 func isCleartextExcluded(s string) bool {
