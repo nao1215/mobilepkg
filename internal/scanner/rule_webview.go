@@ -43,16 +43,17 @@ var webviewTargets = []webviewTarget{
 		checkTrue: true,
 	},
 	{
-		class:    "android/webkit/WebSettings",
-		method:   "setAllowUniversalAccessFromFileURLs",
-		severity: "error",
-		message:  "WebView universal file access enabled — file:// URLs can access any origin",
+		class:     "android/webkit/WebSettings",
+		method:    "setAllowUniversalAccessFromFileURLs",
+		severity:  "error",
+		message:   "WebView universal file access enabled — file:// URLs can access any origin",
+		checkTrue: true,
 	},
 	{
 		class:    "android/webkit/WebSettings",
 		method:   "setMixedContentMode",
-		severity: "warn",
-		message:  "WebView mixed content mode configured — may allow HTTP content in HTTPS pages",
+		severity: "info",
+		message:  "WebView mixed content mode explicitly configured — verify MIXED_CONTENT_ALWAYS_ALLOW (0) is not used",
 	},
 	{
 		class:     "android/webkit/WebView",
@@ -71,16 +72,18 @@ func (r *insecureWebViewRule) Match(ctx *Context) []Finding {
 		for _, wt := range webviewTargets {
 			calls := df.FindMethodCalls(wt.class, wt.method)
 			for _, cs := range calls {
+				// If checkTrue is set, verify the argument is true (const/4 with value 1).
+				// This check must run BEFORE dedup so that a safe (false) call
+				// does not suppress a later dangerous (true) call in the same method.
+				if wt.checkTrue && !isBoolArgTrue(df, cs) {
+					continue
+				}
+
 				key := fmt.Sprintf("%s.%s@%s.%s", wt.class, wt.method, cs.CallerClass, cs.CallerMethod)
 				if _, ok := seen[key]; ok {
 					continue
 				}
 				seen[key] = struct{}{}
-
-				// If checkTrue is set, verify the argument is true (const/4 with value 1).
-				if wt.checkTrue && !isBoolArgTrue(df, cs) {
-					continue
-				}
 
 				severity := wt.severity
 				confidence := confHigh
