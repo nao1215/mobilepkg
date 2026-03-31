@@ -168,6 +168,46 @@ func TestDefaultRules(t *testing.T) {
 	assert.Contains(t, names, "DangerousAPIs")
 }
 
+func TestCleartextTraffic_NoDotHostExcluded(t *testing.T) {
+	t.Parallel()
+
+	df := buildTestDEXWithStrings(t, []string{
+		"http://wifi-not-enabled",
+		"http://some-internal-name/path",
+	})
+
+	ctx := &Context{DexFiles: []*dex.File{df}}
+	rule := &cleartextTrafficRule{}
+	findings := rule.Match(ctx)
+
+	assert.Empty(t, findings, "hostnames without a dot should be excluded")
+}
+
+func TestIsKnownLibraryClass(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		class    string
+		expected bool
+	}{
+		{"ACRA collector", "Lorg/acra/collector/MemoryInfoCollector;", true},
+		{"Google library", "Lcom/google/vr/dynamite/client/DynamiteClient;", true},
+		{"AndroidX", "Landroidx/work/impl/background/systemjob/SystemJobService;", true},
+		{"Chromium", "Lorg/chromium/base/BundleUtils;", true},
+		{"App code", "Lcom/example/myapp/MainActivity;", false},
+		{"OWASP test app", "Lowasp/sat/agoat/RootDetectionActivity;", false},
+		{"Obfuscated class", "Lq07;", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, tt.expected, isKnownLibraryClass(tt.class))
+		})
+	}
+}
+
 func TestHardcodedSecrets_Deduplication(t *testing.T) {
 	t.Parallel()
 

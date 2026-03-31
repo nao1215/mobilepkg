@@ -1,6 +1,9 @@
 package scanner
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 type dangerousAPIsRule struct{}
 
@@ -86,6 +89,9 @@ func (r *dangerousAPIsRule) Match(ctx *Context) []Finding {
 
 // matchPerCallsite emits one finding per unique caller for error/warn APIs.
 // This ensures new callers appear as new findings in baseline diff.
+// When the caller belongs to a well-known library, severity is capped at
+// "warn" and confidence is lowered to "medium" to reduce noise from
+// expected library behavior (e.g. crash reporters calling Runtime.exec).
 func matchPerCallsite(ctx *Context, dt dangerousTarget) []Finding {
 	var findings []Finding
 	seen := make(map[string]struct{})
@@ -99,12 +105,24 @@ func matchPerCallsite(ctx *Context, dt dangerousTarget) []Finding {
 			}
 			seen[key] = struct{}{}
 
+			severity := dt.severity
+			confidence := "high"
+			msg := fmt.Sprintf("%s (in %s)", dt.message, cs.CallerClass)
+
+			if isKnownLibraryClass(cs.CallerClass) {
+				if severity == "error" {
+					severity = "warn"
+				}
+				confidence = "medium"
+				msg = fmt.Sprintf("%s (in library %s)", dt.message, cs.CallerClass)
+			}
+
 			findings = append(findings, Finding{
 				ID:          fmt.Sprintf("dex.api.%s.%s.%s", sanitizeID(dt.class), dt.method, sanitizeID(cs.CallerClass)),
 				Category:    "dex_dangerous_api",
-				Severity:    dt.severity,
-				Confidence:  "high",
-				Message:     fmt.Sprintf("%s (in %s)", dt.message, cs.CallerClass),
+				Severity:    severity,
+				Confidence:  confidence,
+				Message:     msg,
 				ArchivePath: ctx.dexName(i),
 				Field:       fmt.Sprintf("%s->%s", cs.CallerClass, cs.CallerMethod),
 				Matched:     fmt.Sprintf("%s.%s()", dt.class, dt.method),
@@ -169,4 +187,36 @@ type callInfo struct {
 	callerMethod string
 	offset       int
 	archivePath  string
+}
+
+// knownLibraryPrefixes lists package prefixes for well-known third-party
+// libraries and framework code. When a dangerous API call originates from
+// one of these packages, it is typically expected behavior (e.g. crash
+// reporters calling Runtime.exec to collect system info) rather than an
+// application-level vulnerability.
+var knownLibraryPrefixes = []string{
+	"Landroidx/",
+	"Lcom/google/",
+	"Lorg/acra/",
+	"Lcom/squareup/",
+	"Lcom/bumptech/",
+	"Lokhttp3/",
+	"Lretrofit2/",
+	"Lio/reactivex/",
+	"Lkotlinx/",
+	"Lcom/facebook/",
+	"Lcom/crashlytics/",
+	"Lio/sentry/",
+	"Lorg/chromium/",
+}
+
+// isKnownLibraryClass returns true if the caller class belongs to a
+// well-known library or framework package.
+func isKnownLibraryClass(callerClass string) bool {
+	for _, prefix := range knownLibraryPrefixes {
+		if strings.HasPrefix(callerClass, prefix) {
+			return true
+		}
+	}
+	return false
 }
