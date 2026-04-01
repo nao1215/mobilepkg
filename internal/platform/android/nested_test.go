@@ -200,7 +200,7 @@ func TestOpenAllInnerAPKs_SkipsNoDEXSplits(t *testing.T) {
 
 	readers, diags := OpenAllInnerAPKs(zr, 10<<20)
 
-	var names []string
+	names := make([]string, 0, len(readers))
 	for _, r := range readers {
 		names = append(names, r.Name)
 	}
@@ -314,7 +314,7 @@ func TestOpenAllInnerAPKs_OversizeIsInfo_CorruptIsWarn(t *testing.T) {
 	readers, diags := OpenAllInnerAPKs(zr, 1024)
 
 	// base.apk should succeed (it's small enough).
-	var names []string
+	names := make([]string, 0, len(readers))
 	for _, r := range readers {
 		names = append(names, r.Name)
 	}
