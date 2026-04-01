@@ -10,20 +10,40 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// makeInnerAPKWithDEX creates a minimal valid ZIP containing a dummy
+// classes.dex entry so that containsDEX returns true.
+func makeInnerAPKWithDEX(t *testing.T) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	w := zip.NewWriter(&buf)
+	f, err := w.Create("classes.dex")
+	require.NoError(t, err)
+	_, err = f.Write([]byte("dex\n035\x00")) // minimal magic, not a real DEX
+	require.NoError(t, err)
+	require.NoError(t, w.Close())
+	return buf.Bytes()
+}
+
+// makeInnerAPKNoDEX creates a minimal valid ZIP with no DEX entries.
+func makeInnerAPKNoDEX(t *testing.T) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	w := zip.NewWriter(&buf)
+	f, err := w.Create("resources.arsc")
+	require.NoError(t, err)
+	_, err = f.Write([]byte("dummy"))
+	require.NoError(t, err)
+	require.NoError(t, w.Close())
+	return buf.Bytes()
+}
+
 func TestOpenAllInnerAPKs_CapsAtMaxInnerAPKs(t *testing.T) {
 	t.Parallel()
 
-	// Build an outer ZIP containing maxInnerAPKs+10 inner .apk entries.
-	// Each inner APK is a minimal valid ZIP (empty archive).
+	innerBytes := makeInnerAPKWithDEX(t)
+
 	var outerBuf bytes.Buffer
 	outerW := zip.NewWriter(&outerBuf)
-
-	// Create a minimal valid empty ZIP to use as each inner APK.
-	var innerBuf bytes.Buffer
-	innerW := zip.NewWriter(&innerBuf)
-	require.NoError(t, innerW.Close())
-	innerBytes := innerBuf.Bytes()
-
 	count := maxInnerAPKs + 10
 	for i := range count {
 		name := "split_" + string(rune('A'+i/26)) + string(rune('a'+i%26)) + ".apk"
@@ -42,7 +62,6 @@ func TestOpenAllInnerAPKs_CapsAtMaxInnerAPKs(t *testing.T) {
 
 	assert.LessOrEqual(t, len(readers), maxInnerAPKs)
 
-	// Should have a diagnostic about exceeding the limit.
 	var found bool
 	for _, d := range diags {
 		if d.Code == "dex.too_many_inner_apks" {
@@ -56,8 +75,7 @@ func TestOpenAllInnerAPKs_CapsAtMaxInnerAPKs(t *testing.T) {
 func TestFindNestedAPK_SkipsValidationFailureAndTriesNext(t *testing.T) {
 	t.Parallel()
 
-	// Create two valid inner APKs.
-	makeInnerAPK := func() []byte {
+	makeEmpty := func() []byte {
 		var buf bytes.Buffer
 		w := zip.NewWriter(&buf)
 		require.NoError(t, w.Close())
@@ -69,7 +87,7 @@ func TestFindNestedAPK_SkipsValidationFailureAndTriesNext(t *testing.T) {
 	for _, name := range []string{"bad.apk", "good.apk"} {
 		w, err := outerW.Create(name)
 		require.NoError(t, err)
-		_, err = w.Write(makeInnerAPK())
+		_, err = w.Write(makeEmpty())
 		require.NoError(t, err)
 	}
 	require.NoError(t, outerW.Close())
@@ -78,9 +96,6 @@ func TestFindNestedAPK_SkipsValidationFailureAndTriesNext(t *testing.T) {
 	zr, err := zip.NewReader(outerReader, int64(outerBuf.Len()))
 	require.NoError(t, err)
 
-	// Validator that rejects "bad.apk" (first candidate) but would
-	// accept "good.apk" (second candidate). We track which archives
-	// were validated by counting calls.
 	calls := 0
 	rejectFirst := InnerArchiveValidator(func(_ *zip.Reader) error {
 		calls++
@@ -96,53 +111,86 @@ func TestFindNestedAPK_SkipsValidationFailureAndTriesNext(t *testing.T) {
 	assert.Equal(t, 2, calls, "validator should have been called for both candidates")
 }
 
-func TestIsLikelyDEXSplit(t *testing.T) {
+func TestIsConfigSplit(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
 		name   string
 		expect bool
 	}{
-		// Should be kept (likely contain DEX).
-		{"base.apk", true},
-		{"split_config.apk", true},       // not "config." prefix after stripping dir
-		{"feature_dynamic.apk", true},
-		{"splits/base-master.apk", true},
+		{"config.arm64_v8a.apk", true},
+		{"config.en.apk", true},
+		{"config.xxhdpi.apk", true},
+		{"splits/config.de.apk", true},
 
-		// Should be filtered out.
+		// Not config splits.
+		{"base.apk", false},
+		{"split_config.apk", false},
+		{"feature_dynamic.apk", false},
+		{"splits/base-master.apk", false},
+		{"com.example.packet.apk", false},
 		{"obbassets.apk", false},
-		{"config.arm64_v8a.apk", false},
-		{"config.en.apk", false},
-		{"config.xxhdpi.apk", false},
-		{"asset_pack_main.apk", false},
-		{"obb_main.apk", false},
-		{"splits/config.de.apk", false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			assert.Equal(t, tt.expect, isLikelyDEXSplit(tt.name))
+			assert.Equal(t, tt.expect, isConfigSplit(tt.name))
 		})
 	}
 }
 
-func TestOpenAllInnerAPKs_SkipsAssetAndOBBSplits(t *testing.T) {
+func TestContainsDEX(t *testing.T) {
 	t.Parallel()
 
-	var innerBuf bytes.Buffer
-	innerW := zip.NewWriter(&innerBuf)
-	require.NoError(t, innerW.Close())
-	innerBytes := innerBuf.Bytes()
+	t.Run("with DEX", func(t *testing.T) {
+		t.Parallel()
+		data := makeInnerAPKWithDEX(t)
+		r := bytes.NewReader(data)
+		zr, err := zip.NewReader(r, int64(len(data)))
+		require.NoError(t, err)
+		assert.True(t, containsDEX(zr))
+	})
+
+	t.Run("without DEX", func(t *testing.T) {
+		t.Parallel()
+		data := makeInnerAPKNoDEX(t)
+		r := bytes.NewReader(data)
+		zr, err := zip.NewReader(r, int64(len(data)))
+		require.NoError(t, err)
+		assert.False(t, containsDEX(zr))
+	})
+}
+
+func TestOpenAllInnerAPKs_SkipsNoDEXSplits(t *testing.T) {
+	t.Parallel()
+
+	dexAPK := makeInnerAPKWithDEX(t)
+	noDexAPK := makeInnerAPKNoDEX(t)
 
 	var outerBuf bytes.Buffer
 	outerW := zip.NewWriter(&outerBuf)
-	for _, name := range []string{"base.apk", "obbassets.apk", "config.arm64_v8a.apk", "feature.apk"} {
+
+	// base.apk has DEX, feature.apk has DEX.
+	for _, name := range []string{"base.apk", "feature.apk"} {
 		w, err := outerW.Create(name)
 		require.NoError(t, err)
-		_, err = w.Write(innerBytes)
+		_, err = w.Write(dexAPK)
 		require.NoError(t, err)
 	}
+	// obbassets.apk and asset_pack.apk have no DEX.
+	for _, name := range []string{"obbassets.apk", "asset_pack.apk"} {
+		w, err := outerW.Create(name)
+		require.NoError(t, err)
+		_, err = w.Write(noDexAPK)
+		require.NoError(t, err)
+	}
+	// config split is filtered by name.
+	w, err := outerW.Create("config.arm64_v8a.apk")
+	require.NoError(t, err)
+	_, err = w.Write(dexAPK) // even if it had DEX, config splits are skipped
+	require.NoError(t, err)
+
 	require.NoError(t, outerW.Close())
 
 	outerReader := bytes.NewReader(outerBuf.Bytes())
@@ -156,5 +204,31 @@ func TestOpenAllInnerAPKs_SkipsAssetAndOBBSplits(t *testing.T) {
 		names = append(names, r.Name)
 	}
 	assert.ElementsMatch(t, []string{"base.apk", "feature.apk"}, names)
-	assert.Empty(t, diags, "filtered splits should not produce diagnostics")
+	assert.Empty(t, diags, "non-DEX splits should be silently filtered")
+}
+
+func TestOpenAllInnerAPKs_PacketNameNotFiltered(t *testing.T) {
+	t.Parallel()
+
+	// Regression: "com.example.packet.apk" should NOT be excluded.
+	// The old substring-based filter would have matched "pack" in "packet".
+	dexAPK := makeInnerAPKWithDEX(t)
+
+	var outerBuf bytes.Buffer
+	outerW := zip.NewWriter(&outerBuf)
+	w, err := outerW.Create("com.example.packet.apk")
+	require.NoError(t, err)
+	_, err = w.Write(dexAPK)
+	require.NoError(t, err)
+	require.NoError(t, outerW.Close())
+
+	outerReader := bytes.NewReader(outerBuf.Bytes())
+	zr, err := zip.NewReader(outerReader, int64(outerBuf.Len()))
+	require.NoError(t, err)
+
+	readers, diags := OpenAllInnerAPKs(zr, 10<<20)
+
+	require.Len(t, readers, 1)
+	assert.Equal(t, "com.example.packet.apk", readers[0].Name)
+	assert.Empty(t, diags)
 }

@@ -62,40 +62,43 @@ type InnerArchiveValidator func(zr *zip.Reader) error
 // thousands of split APKs from consuming unbounded memory.
 const maxInnerAPKs = 200
 
-// isLikelyDEXSplit returns true if the inner APK name looks like it could
-// contain DEX code (base, feature modules, dynamic features). It returns
-// false for entries that are clearly asset packs, OBB wrappers, or
-// resource-only config splits that never contain bytecode.
-func isLikelyDEXSplit(name string) bool {
+// isConfigSplit returns true if the inner APK name matches the Android
+// config split naming convention: "config.<qualifier>.apk" (e.g.
+// config.arm64_v8a.apk, config.en.apk, config.xxhdpi.apk). Config splits
+// contain only resources and native libraries, never DEX bytecode.
+func isConfigSplit(name string) bool {
 	lower := strings.ToLower(name)
-
-	// Strip directory prefix (e.g. "splits/base-master.apk" → "base-master.apk").
+	// Strip directory prefix (e.g. "splits/config.de.apk" → "config.de.apk").
 	if idx := strings.LastIndex(lower, "/"); idx >= 0 {
 		lower = lower[idx+1:]
 	}
+	return strings.HasPrefix(lower, "config.")
+}
 
-	// OBB asset packs: names containing "obb", "asset", "pack".
-	for _, marker := range []string{"obb", "asset", "pack"} {
-		if strings.Contains(lower, marker) {
-			return false
+// containsDEX checks whether a zip.Reader contains at least one
+// top-level classes*.dex entry.
+func containsDEX(zr *zip.Reader) bool {
+	for _, f := range zr.File {
+		if strings.Contains(f.Name, "/") {
+			continue
+		}
+		if strings.HasPrefix(f.Name, "classes") && strings.HasSuffix(f.Name, ".dex") {
+			return true
 		}
 	}
-
-	// Config splits: "config.<qualifier>.apk" (e.g. config.arm64_v8a.apk,
-	// config.en.apk, config.xxhdpi.apk). These contain only resources and
-	// native libraries, never DEX.
-	if strings.HasPrefix(lower, "config.") {
-		return false
-	}
-
-	return true
+	return false
 }
 
 // OpenAllInnerAPKs opens every .apk entry inside the outer archive,
 // returning named readers and diagnostics for any that failed to open.
 // At most [maxInnerAPKs] inner APKs are opened; additional entries are
-// reported as diagnostics. Entries that are clearly not DEX-bearing
-// (asset packs, OBB wrappers, config splits) are skipped silently.
+// reported as diagnostics.
+//
+// Config splits (config.<qualifier>.apk) are skipped by name since they
+// never contain DEX. Other inner APKs that can be opened but contain no
+// DEX entries are silently skipped. Inner APKs that exceed the size
+// limit produce an info-level diagnostic (they are typically asset or
+// OBB splits).
 func OpenAllInnerAPKs(zr *zip.Reader, maxEntryBytes int64) ([]NamedZipReader, []Diagnostic) {
 	seen := make(map[string]struct{})
 	var readers []NamedZipReader
@@ -109,7 +112,7 @@ func OpenAllInnerAPKs(zr *zip.Reader, maxEntryBytes int64) ([]NamedZipReader, []
 			continue
 		}
 		seen[f.Name] = struct{}{}
-		if !isLikelyDEXSplit(f.Name) {
+		if isConfigSplit(f.Name) {
 			continue
 		}
 		if attempted >= maxInnerAPKs {
@@ -123,11 +126,16 @@ func OpenAllInnerAPKs(zr *zip.Reader, maxEntryBytes int64) ([]NamedZipReader, []
 		attempted++
 		inner, err := openNestedZip(zr, f.Name, maxEntryBytes)
 		if err != nil {
+			// Size-limit failures are typically asset/OBB splits with no
+			// DEX — report at info level to avoid noisy diagnostics.
 			diags = append(diags, Diagnostic{
 				Code:     "dex.split_open_failed",
-				Severity: "warn",
-				Message:  fmt.Sprintf("failed to open inner APK %s for DEX scanning: %v", f.Name, err),
+				Severity: "info",
+				Message:  fmt.Sprintf("skipped inner APK %s for DEX scanning: %v", f.Name, err),
 			})
+			continue
+		}
+		if !containsDEX(inner) {
 			continue
 		}
 		readers = append(readers, NamedZipReader{Name: f.Name, Reader: inner})
