@@ -280,6 +280,24 @@ func TestCleartextTraffic_SpecAndDocURLsExcluded(t *testing.T) {
 	assert.Empty(t, findings, "specification and documentation URLs should be excluded")
 }
 
+func TestCleartextTraffic_AttackerSubdomainNotExcluded(t *testing.T) {
+	t.Parallel()
+
+	// Attacker-controlled subdomains that look like excluded hosts must
+	// NOT be filtered. The host-based exclusion must be an exact match.
+	df := buildTestDEXWithStrings(t, []string{
+		"http://developer.android.com.attacker.example/phish",
+		"http://www.ietf.org.evil.test/rfc",
+		"http://schemas.android.com.malicious.site/payload",
+	})
+
+	ctx := &Context{DexFiles: []*dex.File{df}}
+	rule := &cleartextTrafficRule{}
+	findings := rule.Match(ctx)
+
+	assert.Len(t, findings, 3, "attacker-controlled subdomains should not be excluded")
+}
+
 func TestCleartextTraffic_BareTLDExcluded(t *testing.T) {
 	t.Parallel()
 

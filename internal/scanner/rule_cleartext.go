@@ -20,54 +20,59 @@ var localhostHosts = map[string]struct{}{
 	"10.0.3.2":  {},
 }
 
-// cleartextExclusions filters out known non-URL strings that start with "http://".
-// These are XML namespace URIs, specification references, example domains,
-// and documentation URLs that are not actual cleartext traffic destinations.
-var cleartextExclusions = []string{
+// excludedHosts is a set of hostnames whose http:// URLs should not
+// produce cleartext findings. These fall into three categories:
+//   - XML namespace / schema authorities (schemas.android.com, www.w3.org)
+//   - Specification / documentation sites (dashif.org, semver.org)
+//   - RFC 2606 / 6761 reserved example domains (example.com/org/net)
+//
+// Matching is done on the parsed hostname (exact match), so
+// "developer.android.com.attacker.example" is NOT excluded.
+var excludedHosts = map[string]struct{}{
 	// XML/schema namespaces
-	"http://schemas.android.com",
-	"http://www.w3.org",
-	"http://ns.adobe.com",
-	"http://xmlpull.org",
-	"http://java.sun.com",
-	"http://xml.org",
-	"http://www.xml.org",
-	"http://apache.org",
-	"http://www.apache.org",
-	"http://purl.org",
-	"http://json-schema.org",
-	"http://www.json.org",
-	"http://docs.oasis-open.org",
-	"http://relaxng.org",
-	"http://schemas.microsoft.com",
-	"http://schemas.xmlsoap.org",
-	"http://www.ietf.org",
-	"http://tools.ietf.org",
-	"http://www.iso.org",
+	"schemas.android.com":    {},
+	"www.w3.org":             {},
+	"ns.adobe.com":           {},
+	"xmlpull.org":            {},
+	"java.sun.com":           {},
+	"xml.org":                {},
+	"www.xml.org":            {},
+	"apache.org":             {},
+	"www.apache.org":         {},
+	"purl.org":               {},
+	"json-schema.org":        {},
+	"www.json.org":           {},
+	"docs.oasis-open.org":    {},
+	"relaxng.org":            {},
+	"schemas.microsoft.com":  {},
+	"schemas.xmlsoap.org":    {},
+	"www.ietf.org":           {},
+	"tools.ietf.org":         {},
+	"www.iso.org":            {},
 	// Example/test domains (RFC 2606 / RFC 6761)
-	"http://example.com",
-	"http://example.org",
-	"http://example.net",
-	"http://www.example.com",
-	"http://www.example.org",
-	"http://www.example.net",
-	// Specification and documentation URLs
-	"http://dashif.org",
-	"http://www.dashif.org",
-	"http://id3.org",
-	"http://www.id3.org",
-	"http://www.unicode.org",
-	"http://www.rfc-editor.org",
-	"http://semver.org",
-	"http://opensource.org",
-	"http://creativecommons.org",
-	"http://developer.android.com",
-	"http://developer.apple.com",
+	"example.com":     {},
+	"example.org":     {},
+	"example.net":     {},
+	"www.example.com": {},
+	"www.example.org": {},
+	"www.example.net": {},
+	// Specification and documentation sites
+	"dashif.org":              {},
+	"www.dashif.org":          {},
+	"id3.org":                 {},
+	"www.id3.org":             {},
+	"www.unicode.org":         {},
+	"www.rfc-editor.org":      {},
+	"semver.org":              {},
+	"opensource.org":           {},
+	"creativecommons.org":     {},
+	"developer.android.com":   {},
+	"developer.apple.com":     {},
 	// Logging/library documentation
-	"http://logback.qos.ch",
-	"http://logging.apache.org",
-	"http://slf4j.org",
-	"http://www.slf4j.org",
+	"logback.qos.ch":    {},
+	"logging.apache.org": {},
+	"slf4j.org":          {},
+	"www.slf4j.org":      {},
 }
 
 func (r *cleartextTrafficRule) Match(ctx *Context) []Finding {
@@ -82,9 +87,6 @@ func (r *cleartextTrafficRule) Match(ctx *Context) []Finding {
 			if len(s) > 1024 {
 				continue
 			}
-			if isCleartextExcluded(s) {
-				continue
-			}
 
 			u, err := url.Parse(s)
 			if err != nil {
@@ -95,6 +97,9 @@ func (r *cleartextTrafficRule) Match(ctx *Context) []Finding {
 				continue
 			}
 			if _, ok := localhostHosts[host]; ok {
+				continue
+			}
+			if _, ok := excludedHosts[strings.ToLower(host)]; ok {
 				continue
 			}
 			// Skip hostnames that are not plausible domain names — they need
@@ -178,15 +183,6 @@ var commonTLDs = map[string]struct{}{
 func isBareTLD(host string) bool {
 	_, ok := commonTLDs[strings.ToLower(host)]
 	return ok
-}
-
-func isCleartextExcluded(s string) bool {
-	for _, exc := range cleartextExclusions {
-		if strings.HasPrefix(s, exc) {
-			return true
-		}
-	}
-	return false
 }
 
 func truncate(s string, maxLen int) string {
