@@ -73,6 +73,11 @@ var excludedHosts = map[string]struct{}{
 	"logging.apache.org": {},
 	"slf4j.org":          {},
 	"www.slf4j.org":      {},
+	// SDK schema namespaces
+	"schemas.applovin.com": {},
+	// Specification URLs
+	"specs.openid.net": {},
+	"openid.net":       {},
 }
 
 func (r *cleartextTrafficRule) Match(ctx *Context) []Finding {
@@ -156,6 +161,13 @@ func isPlausibleHostname(host string) bool {
 	if _, ok := implausibleHosts[host]; ok {
 		return false
 	}
+	// Filter Java/Kotlin class names that URL-parse as hostnames.
+	// Real hostnames are conventionally lowercase; a label starting
+	// with an uppercase letter (e.g. "javax.xml.XMLConstants") is
+	// almost certainly a class name, not a network destination.
+	if looksLikeJavaClassName(host) {
+		return false
+	}
 	// Bare TLDs or "www.<TLD>" are not real destinations.
 	if isBareTLD(host) {
 		return false
@@ -177,6 +189,18 @@ var commonTLDs = map[string]struct{}{
 	"co": {}, "us": {}, "uk": {}, "de": {}, "fr": {},
 	"jp": {}, "cn": {}, "ru": {}, "br": {}, "in": {},
 	"au": {}, "ca": {}, "kr": {}, "it": {}, "es": {},
+}
+
+// looksLikeJavaClassName returns true if the hostname contains a label
+// starting with an uppercase letter, which indicates a Java/Kotlin class
+// name that URL-parsed as a hostname (e.g. "javax.xml.XMLConstants").
+func looksLikeJavaClassName(host string) bool {
+	for _, label := range strings.Split(host, ".") {
+		if len(label) > 0 && label[0] >= 'A' && label[0] <= 'Z' {
+			return true
+		}
+	}
+	return false
 }
 
 // isBareTLD returns true if the host is a bare top-level domain.
