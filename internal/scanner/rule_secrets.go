@@ -21,6 +21,15 @@ var secretExclusions = []string{
 	"http://www.w3.org",
 	"http://ns.adobe.com",
 	"http://xmlpull.org",
+	// Documentation and specification URLs
+	"http://developer.android.com",
+	"http://developer.apple.com",
+	"https://developer.android.com",
+	"https://developer.apple.com",
+	"https://www.googleapis.com/auth/",
+	// Common library/SDK constants that embed API key patterns
+	"https://firebase.google.com",
+	"https://play.google.com",
 }
 
 func (r *hardcodedSecretsRule) Match(ctx *Context) []Finding {

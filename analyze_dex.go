@@ -38,6 +38,10 @@ func analyzeDex(readers []namedReader, format Format, maxEntryBytes int64) ([]Fi
 
 	findings := make([]Finding, 0, len(scanFindings))
 	for _, sf := range scanFindings {
+		matched := sf.Matched
+		if sf.Category == "dex_secret" {
+			matched = maskSecret(matched)
+		}
 		findings = append(findings, Finding{
 			ID:         sf.ID,
 			Category:   sf.Category,
@@ -47,7 +51,7 @@ func analyzeDex(readers []namedReader, format Format, maxEntryBytes int64) ([]Fi
 			Evidence: []Evidence{{
 				ArchivePath:       sf.ArchivePath,
 				Field:             sf.Field,
-				MatchedTextMasked: maskSecret(sf.Matched),
+				MatchedTextMasked: matched,
 				Offset:            sf.Offset,
 			}},
 			Fingerprint: fingerprint(sf.Category, sf.ID),

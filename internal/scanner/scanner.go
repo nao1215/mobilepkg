@@ -20,6 +20,22 @@ const (
 	confLow    = "low"
 )
 
+// severityRank returns a numeric rank for a severity string, with higher
+// values indicating more severe findings. Used to keep the worst finding
+// when deduplicating.
+func severityRank(sev string) int {
+	switch sev {
+	case sevError:
+		return 3
+	case sevWarn:
+		return 2
+	case sevInfo:
+		return 1
+	default:
+		return 0
+	}
+}
+
 // adjustForLibrary lowers severity and confidence when the caller belongs
 // to a well-known library. Returns the adjusted severity, confidence, and
 // formatted message.

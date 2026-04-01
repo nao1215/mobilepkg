@@ -214,6 +214,17 @@ func TestIsPlausibleHostname(t *testing.T) {
 		{"wifi-not-enabled", false},
 		{"www.", false},
 		{"", false},
+		// Bare TLDs and www.<TLD> should be filtered.
+		{"com", false},
+		{"org", false},
+		{"www.com", false},
+		{"www.org", false},
+		// Java class names parsed as hostnames.
+		{"javax.xml.XMLConstants", false},
+		{"java.lang.String", false},
+		// Uppercase in real TLD label is fine (edge case, but hostname is case-insensitive).
+		// However, a label starting with uppercase is suspicious.
+		{"Foo.example.com", false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.host, func(t *testing.T) {
@@ -238,10 +249,17 @@ func TestIsKnownLibraryClass(t *testing.T) {
 		{"Sentry", "Lio/sentry/android/core/SentryAndroid;", true},
 		{"AWS SDK", "Lcom/amazonaws/services/s3/AmazonS3Client;", true},
 		{"Microsoft SDK", "Lcom/microsoft/identity/client/PublicClientApplication;", true},
+		// Ad SDKs
+		{"AppLovin", "Lcom/applovin/impl/adview/AppLovinWebViewBase;", true},
+		{"Unity3D", "Lcom/unity3d/services/core/webview/WebView;", true},
+		{"Mbridge", "Lcom/mbridge/msdk/foundation/webview/BrowserView;", true},
+		{"IAB OMID", "Lcom/iab/omid/library/applovin/publisher/b;", true},
+		{"Facebook ads", "Lcom/facebook/ads/internal/dynamicloading/DynamicLoaderFactory;", true},
+		{"Facebook appevents", "Lcom/facebook/appevents/AppEventsLoggerImpl$Companion;", true},
 		// Broad vendor prefixes must NOT match — they include first-party app code.
 		{"Google VR (first-party)", "Lcom/google/vr/dynamite/client/DynamiteClient;", false},
 		{"Chromium base (first-party)", "Lorg/chromium/base/BundleUtils;", false},
-		{"Facebook app code", "Lcom/facebook/appevents/AppEventsLogger;", false},
+		{"Facebook main app code", "Lcom/facebook/litho/Component;", false},
 		// Clearly app-level code.
 		{"App code", "Lcom/example/myapp/MainActivity;", false},
 		{"OWASP test app", "Lowasp/sat/agoat/RootDetectionActivity;", false},
@@ -254,6 +272,58 @@ func TestIsKnownLibraryClass(t *testing.T) {
 			assert.Equal(t, tt.expected, isKnownLibraryClass(tt.class))
 		})
 	}
+}
+
+func TestCleartextTraffic_SpecAndDocURLsExcluded(t *testing.T) {
+	t.Parallel()
+
+	df := buildTestDEXWithStrings(t, []string{
+		"http://dashif.org/guidelines/mpd",
+		"http://logback.qos.ch/manual/configuration.html",
+		"http://www.example.com/test",
+		"http://www.ietf.org/rfc/rfc2396.txt",
+		"http://developer.android.com/guide",
+		"http://semver.org/",
+	})
+
+	ctx := &Context{DexFiles: []*dex.File{df}}
+	rule := &cleartextTrafficRule{}
+	findings := rule.Match(ctx)
+
+	assert.Empty(t, findings, "specification and documentation URLs should be excluded")
+}
+
+func TestCleartextTraffic_AttackerSubdomainNotExcluded(t *testing.T) {
+	t.Parallel()
+
+	// Attacker-controlled subdomains that look like excluded hosts must
+	// NOT be filtered. The host-based exclusion must be an exact match.
+	df := buildTestDEXWithStrings(t, []string{
+		"http://developer.android.com.attacker.example/phish",
+		"http://www.ietf.org.evil.test/rfc",
+		"http://schemas.android.com.malicious.site/payload",
+	})
+
+	ctx := &Context{DexFiles: []*dex.File{df}}
+	rule := &cleartextTrafficRule{}
+	findings := rule.Match(ctx)
+
+	assert.Len(t, findings, 3, "attacker-controlled subdomains should not be excluded")
+}
+
+func TestCleartextTraffic_BareTLDExcluded(t *testing.T) {
+	t.Parallel()
+
+	df := buildTestDEXWithStrings(t, []string{
+		"http://www.com/path",
+		"http://com/something",
+	})
+
+	ctx := &Context{DexFiles: []*dex.File{df}}
+	rule := &cleartextTrafficRule{}
+	findings := rule.Match(ctx)
+
+	assert.Empty(t, findings, "bare TLD hostnames should be excluded")
 }
 
 func TestHardcodedSecrets_Deduplication(t *testing.T) {
