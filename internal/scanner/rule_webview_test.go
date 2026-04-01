@@ -24,15 +24,13 @@ func buildWebViewTestDEX(t *testing.T, strings []string) *dex.File {
 func TestInsecureWebView_DetectsTargetMethods(t *testing.T) {
 	t.Parallel()
 
-	// This test verifies the rule registers all expected target methods.
-	// Since we can't easily build DEX bytecode with invoke instructions,
-	// we verify the target list is complete.
+	// Verify the rule registers all expected target methods in webviewTargets.
+	// setMixedContentMode is handled separately with value-based analysis.
 	expectedMethods := []string{
 		"setJavaScriptEnabled",
 		"addJavascriptInterface",
 		"setAllowFileAccess",
 		"setAllowUniversalAccessFromFileURLs",
-		"setMixedContentMode",
 		"setWebContentsDebuggingEnabled",
 	}
 
@@ -160,4 +158,71 @@ func TestInsecureWebView_AllCheckTrueTargets(t *testing.T) {
 	}
 
 	assert.Equal(t, expected, actual, "checkTrue targets should match expected set")
+}
+
+func TestGetPrecedingIntArg(t *testing.T) {
+	t.Parallel()
+
+	le := binary.LittleEndian
+
+	headerBytes := make([]byte, 0x70)
+	copy(headerBytes[0:8], "dex\n035\x00")
+	fileSize := 0x70 + 100
+	le.PutUint32(headerBytes[32:36], uint32(fileSize))
+	le.PutUint32(headerBytes[36:40], 0x70)
+	le.PutUint32(headerBytes[40:44], 0x12345678)
+
+	t.Run("const/4 value 0", func(t *testing.T) {
+		t.Parallel()
+		data := make([]byte, fileSize)
+		copy(data, headerBytes)
+		f, err := dex.Parse(data)
+		require.NoError(t, err)
+
+		data[0x70] = 0x12 // const/4 opcode
+		data[0x71] = 0x00 // v0, value=0
+		cs := dex.CallSite{Offset: 0x72}
+		assert.Equal(t, 0, getPrecedingIntArg(f, cs))
+	})
+
+	t.Run("const/4 value 2", func(t *testing.T) {
+		t.Parallel()
+		data := make([]byte, fileSize)
+		copy(data, headerBytes)
+		f, err := dex.Parse(data)
+		require.NoError(t, err)
+
+		data[0x70] = 0x12 // const/4 opcode
+		data[0x71] = 0x20 // v0, value=2
+		cs := dex.CallSite{Offset: 0x72}
+		assert.Equal(t, 2, getPrecedingIntArg(f, cs))
+	})
+
+	t.Run("const/16 value 0", func(t *testing.T) {
+		t.Parallel()
+		data := make([]byte, fileSize)
+		copy(data, headerBytes)
+		f, err := dex.Parse(data)
+		require.NoError(t, err)
+
+		data[0x70] = 0x13 // const/16 opcode
+		data[0x71] = 0x00 // v0
+		data[0x72] = 0x00 // value low
+		data[0x73] = 0x00 // value high
+		cs := dex.CallSite{Offset: 0x74}
+		assert.Equal(t, 0, getPrecedingIntArg(f, cs))
+	})
+
+	t.Run("unknown instruction returns -1", func(t *testing.T) {
+		t.Parallel()
+		data := make([]byte, fileSize)
+		copy(data, headerBytes)
+		f, err := dex.Parse(data)
+		require.NoError(t, err)
+
+		data[0x70] = 0x0E // return-void (not a const)
+		data[0x71] = 0x00
+		cs := dex.CallSite{Offset: 0x72}
+		assert.Equal(t, -1, getPrecedingIntArg(f, cs))
+	})
 }

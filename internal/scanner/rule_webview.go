@@ -49,12 +49,8 @@ var webviewTargets = []webviewTarget{
 		message:   "WebView universal file access enabled — file:// URLs can access any origin",
 		checkTrue: true,
 	},
-	{
-		class:    "android/webkit/WebSettings",
-		method:   "setMixedContentMode",
-		severity: "info",
-		message:  "WebView mixed content mode explicitly configured — verify MIXED_CONTENT_ALWAYS_ALLOW (0) is not used",
-	},
+	// setMixedContentMode is handled separately in matchMixedContentMode
+	// because it requires value-based analysis (only value 0 is dangerous).
 	{
 		class:     "android/webkit/WebView",
 		method:    "setWebContentsDebuggingEnabled",
@@ -63,6 +59,13 @@ var webviewTargets = []webviewTarget{
 		checkTrue: true,
 	},
 }
+
+// Android MIXED_CONTENT_* constants.
+const (
+	mixedContentAlwaysAllow      = 0
+	mixedContentNeverAllow       = 1
+	mixedContentCompatibilityOld = 2
+)
 
 func (r *insecureWebViewRule) Match(ctx *Context) []Finding {
 	var findings []Finding
@@ -147,8 +150,90 @@ func (r *insecureWebViewRule) Match(ctx *Context) []Finding {
 				Offset:      int(cs.Offset),
 			})
 		}
+
+		// Detect setMixedContentMode with value-based analysis.
+		mixedCalls := df.FindMethodCalls("android/webkit/WebSettings", "setMixedContentMode")
+		for _, cs := range mixedCalls {
+			key := fmt.Sprintf("setMixedContentMode@%s.%s", cs.CallerClass, cs.CallerMethod)
+			if _, ok := seen[key]; ok {
+				continue
+			}
+
+			val := getPrecedingIntArg(df, cs)
+			var severity, message string
+			switch val {
+			case mixedContentAlwaysAllow:
+				severity = sevWarn
+				message = "WebView MIXED_CONTENT_ALWAYS_ALLOW (0) — allows loading HTTP resources in HTTPS pages"
+			case mixedContentNeverAllow:
+				continue // safe setting, skip
+			case mixedContentCompatibilityOld:
+				severity = sevInfo
+				message = "WebView MIXED_CONTENT_COMPATIBILITY_MODE (2) — legacy mixed content behavior"
+			default:
+				// Unknown value or can't determine — report as info.
+				severity = sevInfo
+				message = "WebView mixed content mode explicitly configured — verify MIXED_CONTENT_ALWAYS_ALLOW (0) is not used"
+			}
+			seen[key] = struct{}{}
+
+			severity, confidence, msg := adjustForLibrary(cs.CallerClass, severity, message)
+
+			findings = append(findings, Finding{
+				ID:          fmt.Sprintf("dex.webview.setMixedContentMode.%s", sanitizeID(cs.CallerClass)),
+				Category:    "dex_webview",
+				Severity:    severity,
+				Confidence:  confidence,
+				Message:     msg,
+				ArchivePath: ctx.dexName(i),
+				Field:       fmt.Sprintf("%s->%s", cs.CallerClass, cs.CallerMethod),
+				Matched:     fmt.Sprintf("WebSettings.setMixedContentMode(%d)", val),
+				Offset:      int(cs.Offset),
+			})
+		}
 	}
 	return findings
+}
+
+// getPrecedingIntArg looks backward from an invoke instruction for an
+// integer constant loading instruction and returns the value. It checks
+// const/4, const/16, and const (31i) instructions. Returns -1 if the
+// value cannot be determined.
+func getPrecedingIntArg(df *dex.File, cs dex.CallSite) int {
+	data := df.RawData()
+	if data == nil {
+		return -1
+	}
+	off := int(cs.Offset)
+
+	// const/4 (opcode 0x12): 2 bytes — [B|A] 12
+	if off >= 2 {
+		prevInsn := data[off-2 : off]
+		if prevInsn[0] == 0x12 {
+			val := int8(prevInsn[1]) >> 4
+			return int(val)
+		}
+	}
+
+	// const/16 (opcode 0x13): 4 bytes — [AA] 13 [BBBB]
+	if off >= 4 {
+		prevInsn := data[off-4 : off]
+		if prevInsn[0] == 0x13 {
+			val := int16(prevInsn[2]) | int16(prevInsn[3])<<8
+			return int(val)
+		}
+	}
+
+	// const (opcode 0x14): 6 bytes — [AA] 14 [BBBBBBBB]
+	if off >= 6 {
+		prevInsn := data[off-6 : off]
+		if prevInsn[0] == 0x14 {
+			val := int32(prevInsn[2]) | int32(prevInsn[3])<<8 | int32(prevInsn[4])<<16 | int32(prevInsn[5])<<24
+			return int(val)
+		}
+	}
+
+	return -1
 }
 
 // isBoolArgTrue performs lightweight argument tracking. It looks backward from
