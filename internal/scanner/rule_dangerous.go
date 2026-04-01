@@ -189,11 +189,14 @@ type callInfo struct {
 var knownLibraryPrefixes = []string{
 	// Android Jetpack / support libraries
 	"Landroidx/",
+	"Landroid/support/",
 	// Google SDKs (not first-party app code)
 	"Lcom/google/firebase/",
 	"Lcom/google/android/gms/",
 	"Lcom/google/android/material/",
 	"Lcom/google/android/play/",
+	"Lcom/google/android/recaptcha/",
+	"Lcom/google/ads/",
 	// Crash reporters
 	"Lorg/acra/",
 	"Lcom/crashlytics/",
@@ -210,6 +213,45 @@ var knownLibraryPrefixes = []string{
 	// Cloud SDKs
 	"Lcom/amazonaws/",
 	"Lcom/microsoft/",
+	// Ad SDKs
+	"Lcom/applovin/",
+	"Lcom/mbridge/",
+	"Lcom/unity3d/",
+	"Lcom/vungle/",
+	"Lcom/chartboost/",
+	"Lcom/bytedance/sdk/",
+	"Lcom/inmobi/",
+	"Lcom/fyber/",
+	"Lcom/ironsource/",
+	"Lcom/adsbynimbus/",
+	"Lcom/facebook/ads/",
+	"Lnet/pubnative/",
+	"Lcom/iab/omid/",
+	"Lcom/adcolony/",
+	"Lcom/tapjoy/",
+	"Lcom/mopub/",
+	"Lcom/moloco/",
+	"Lcom/safedk/",
+	"Lio/bidmachine/",
+	"Lio/purchasely/",
+	"Lcom/pangle/",
+	"Lcom/five_corp/",
+	"Ljp/naver/",
+	"Lcom/linecorp/",
+	// Game engines
+	"Lcom/epicgames/",
+	"Lnet/gree/unitywebview/",
+	// Authentication / CAPTCHA
+	"Lcom/hcaptcha/",
+	"Lcom/geetest/",
+	"Lcom/arkoselabs/",
+	// Social SDKs (ad/analytics sub-packages)
+	"Lcom/facebook/internal/",
+	"Lcom/facebook/appevents/",
+	// Media / analytics SDKs
+	"Lai/trinityaudio/",
+	"Lcom/appcues/",
+	"Lbolts/",
 }
 
 // isKnownLibraryClass returns true if the caller class belongs to a
