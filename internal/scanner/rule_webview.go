@@ -152,34 +152,34 @@ func (r *insecureWebViewRule) Match(ctx *Context) []Finding {
 		}
 
 		// Detect setMixedContentMode with value-based analysis.
+		// We collect the worst (highest-severity) finding per caller
+		// method because the same method may call setMixedContentMode
+		// multiple times with different values (e.g. COMPATIBILITY then
+		// ALWAYS_ALLOW), and only the most dangerous one matters.
 		mixedCalls := df.FindMethodCalls("android/webkit/WebSettings", "setMixedContentMode")
+		mixedBest := make(map[string]Finding) // key → worst finding so far
 		for _, cs := range mixedCalls {
 			key := fmt.Sprintf("setMixedContentMode@%s.%s", cs.CallerClass, cs.CallerMethod)
-			if _, ok := seen[key]; ok {
-				continue
-			}
 
 			val := getPrecedingIntArg(df, cs)
-			var severity, message string
+			var baseSeverity, message string
 			switch val {
 			case mixedContentAlwaysAllow:
-				severity = sevWarn
+				baseSeverity = sevWarn
 				message = "WebView MIXED_CONTENT_ALWAYS_ALLOW (0) — allows loading HTTP resources in HTTPS pages"
 			case mixedContentNeverAllow:
 				continue // safe setting, skip
 			case mixedContentCompatibilityOld:
-				severity = sevInfo
+				baseSeverity = sevInfo
 				message = "WebView MIXED_CONTENT_COMPATIBILITY_MODE (2) — legacy mixed content behavior"
 			default:
-				// Unknown value or can't determine — report as info.
-				severity = sevInfo
+				baseSeverity = sevInfo
 				message = "WebView mixed content mode explicitly configured — verify MIXED_CONTENT_ALWAYS_ALLOW (0) is not used"
 			}
-			seen[key] = struct{}{}
 
-			severity, confidence, msg := adjustForLibrary(cs.CallerClass, severity, message)
+			severity, confidence, msg := adjustForLibrary(cs.CallerClass, baseSeverity, message)
 
-			findings = append(findings, Finding{
+			f := Finding{
 				ID:          fmt.Sprintf("dex.webview.setMixedContentMode.%s", sanitizeID(cs.CallerClass)),
 				Category:    "dex_webview",
 				Severity:    severity,
@@ -189,7 +189,14 @@ func (r *insecureWebViewRule) Match(ctx *Context) []Finding {
 				Field:       fmt.Sprintf("%s->%s", cs.CallerClass, cs.CallerMethod),
 				Matched:     fmt.Sprintf("WebSettings.setMixedContentMode(%d)", val),
 				Offset:      int(cs.Offset),
-			})
+			}
+
+			if prev, ok := mixedBest[key]; !ok || severityRank(f.Severity) > severityRank(prev.Severity) {
+				mixedBest[key] = f
+			}
+		}
+		for _, f := range mixedBest {
+			findings = append(findings, f)
 		}
 	}
 	return findings
