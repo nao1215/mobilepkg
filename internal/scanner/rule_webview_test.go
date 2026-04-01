@@ -131,6 +131,31 @@ func TestGetPrecedingConstString(t *testing.T) {
 	assert.Equal(t, "http://example.com/page", got)
 }
 
+func TestGetPrecedingConstString_Jumbo(t *testing.T) {
+	t.Parallel()
+
+	// Create a DEX with a string table entry at index 0.
+	df := buildWebViewTestDEX(t, []string{"http://evil.com/page"})
+	data := df.RawData()
+	if len(data) < 0x80 {
+		t.Skip("DEX too small for bytecode test")
+	}
+
+	// Place const-string/jumbo v0, #0 at a known offset.
+	// Format: [AA] 1B [BBBBBBBB] — 6 bytes total.
+	off := len(data) - 12
+	data[off] = 0x1B // const-string/jumbo opcode
+	data[off+1] = 0  // register vAA = v0
+	data[off+2] = 0  // string index byte 0
+	data[off+3] = 0  // string index byte 1
+	data[off+4] = 0  // string index byte 2
+	data[off+5] = 0  // string index byte 3
+
+	cs := dex.CallSite{Offset: uint32(off + 6)}
+	got := getPrecedingConstString(df, cs)
+	assert.Equal(t, "http://evil.com/page", got)
+}
+
 func TestInsecureWebView_EmptyContext(t *testing.T) {
 	t.Parallel()
 

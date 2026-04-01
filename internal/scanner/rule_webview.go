@@ -272,8 +272,9 @@ func isBoolArgTrue(df *dex.File, cs dex.CallSite) bool {
 	return true
 }
 
-// getPrecedingConstString looks for a const-string instruction immediately
-// before the invoke and returns the loaded string if found.
+// getPrecedingConstString looks for a const-string or const-string/jumbo
+// instruction immediately before the invoke and returns the loaded string
+// if found.
 func getPrecedingConstString(df *dex.File, cs dex.CallSite) string {
 	data := df.RawData()
 	if data == nil {
@@ -292,5 +293,18 @@ func getPrecedingConstString(df *dex.File, cs dex.CallSite) string {
 			}
 		}
 	}
+
+	// const-string/jumbo (opcode 0x1B): 6 bytes — [AA] 1B [BBBBBBBB]
+	// Used when the string index exceeds 16 bits (large DEX files).
+	if off >= 6 {
+		prevOp := data[off-6]
+		if prevOp == 0x1B {
+			strIdx := int(data[off-4]) | int(data[off-3])<<8 | int(data[off-2])<<16 | int(data[off-1])<<24
+			if strIdx >= 0 && strIdx < len(strs) {
+				return strs[strIdx]
+			}
+		}
+	}
+
 	return ""
 }
