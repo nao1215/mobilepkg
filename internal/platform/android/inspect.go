@@ -500,6 +500,9 @@ func convertIntentFilters(filters []intentFilter) []IntentFilterInfo {
 	return result
 }
 
+// ErrEntryOversize is returned when a ZIP entry exceeds the size limit.
+var ErrEntryOversize = errors.New("entry exceeds size limit")
+
 func readZipFile(zr *zip.Reader, name string, maxBytes int64) ([]byte, error) {
 	for _, f := range zr.File {
 		if f.Name != name {
@@ -518,7 +521,7 @@ func readZipFile(zr *zip.Reader, name string, maxBytes int64) ([]byte, error) {
 				return nil, err
 			}
 			if int64(len(data)) > maxBytes {
-				return nil, fmt.Errorf("entry %q exceeds size limit of %d bytes", name, maxBytes)
+				return nil, fmt.Errorf("entry %q exceeds size limit of %d bytes: %w", name, maxBytes, ErrEntryOversize)
 			}
 			return data, nil
 		}

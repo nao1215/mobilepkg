@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -231,4 +232,62 @@ func TestOpenAllInnerAPKs_PacketNameNotFiltered(t *testing.T) {
 	require.Len(t, readers, 1)
 	assert.Equal(t, "com.example.packet.apk", readers[0].Name)
 	assert.Empty(t, diags)
+}
+
+func TestOpenAllInnerAPKs_OversizeIsInfo_CorruptIsWarn(t *testing.T) {
+	t.Parallel()
+
+	dexAPK := makeInnerAPKWithDEX(t)
+
+	var outerBuf bytes.Buffer
+	outerW := zip.NewWriter(&outerBuf)
+
+	// A normal DEX-bearing APK (will succeed).
+	w, err := outerW.Create("base.apk")
+	require.NoError(t, err)
+	_, err = w.Write(dexAPK)
+	require.NoError(t, err)
+
+	// A large APK that will exceed the size limit → info diagnostic.
+	w, err = outerW.Create("huge.apk")
+	require.NoError(t, err)
+	bigData := make([]byte, 2048)
+	_, err = w.Write(bigData) // will exceed our limit
+	require.NoError(t, err)
+
+	// Corrupt data that is not a valid ZIP → warn diagnostic.
+	w, err = outerW.Create("corrupt.apk")
+	require.NoError(t, err)
+	_, err = w.Write([]byte("this is not a zip"))
+	require.NoError(t, err)
+
+	require.NoError(t, outerW.Close())
+
+	outerReader := bytes.NewReader(outerBuf.Bytes())
+	zr, err := zip.NewReader(outerReader, int64(outerBuf.Len()))
+	require.NoError(t, err)
+
+	// Use a small maxEntryBytes so base.apk fits but huge.apk triggers
+	// ErrEntryOversize.
+	readers, diags := OpenAllInnerAPKs(zr, 1024)
+
+	// base.apk should succeed (it's small enough).
+	var names []string
+	for _, r := range readers {
+		names = append(names, r.Name)
+	}
+	assert.Contains(t, names, "base.apk")
+
+	// Check diagnostics: huge.apk → info, corrupt.apk → warn.
+	diagMap := make(map[string]string)
+	for _, d := range diags {
+		// Extract the APK name from the message for keying.
+		for _, apk := range []string{"huge.apk", "corrupt.apk"} {
+			if strings.Contains(d.Message, apk) {
+				diagMap[apk] = d.Severity
+			}
+		}
+	}
+	assert.Equal(t, "info", diagMap["huge.apk"], "oversize split should produce info diagnostic")
+	assert.Equal(t, "warn", diagMap["corrupt.apk"], "corrupt split should produce warn diagnostic")
 }

@@ -3,6 +3,7 @@ package android
 import (
 	"archive/zip"
 	"bytes"
+	"errors"
 	"fmt"
 	"strings"
 )
@@ -126,12 +127,18 @@ func OpenAllInnerAPKs(zr *zip.Reader, maxEntryBytes int64) ([]NamedZipReader, []
 		attempted++
 		inner, err := openNestedZip(zr, f.Name, maxEntryBytes)
 		if err != nil {
-			// Size-limit failures are typically asset/OBB splits with no
-			// DEX — report at info level to avoid noisy diagnostics.
+			// Size-limit failures are typically asset/OBB splits with
+			// no DEX — report at info to avoid noisy diagnostics.
+			// Other failures (corrupt zip, I/O errors) stay at warn
+			// because they may indicate a broken code-bearing split.
+			sev := "warn"
+			if errors.Is(err, ErrEntryOversize) {
+				sev = "info"
+			}
 			diags = append(diags, Diagnostic{
 				Code:     "dex.split_open_failed",
-				Severity: "info",
-				Message:  fmt.Sprintf("skipped inner APK %s for DEX scanning: %v", f.Name, err),
+				Severity: sev,
+				Message:  fmt.Sprintf("failed to open inner APK %s for DEX scanning: %v", f.Name, err),
 			})
 			continue
 		}
