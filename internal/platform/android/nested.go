@@ -116,15 +116,6 @@ func OpenAllInnerAPKs(zr *zip.Reader, maxEntryBytes int64) ([]NamedZipReader, []
 		if isConfigSplit(f.Name) {
 			continue
 		}
-		if attempted >= maxInnerAPKs {
-			diags = append(diags, Diagnostic{
-				Code:     "dex.too_many_inner_apks",
-				Severity: "warn",
-				Message:  fmt.Sprintf("inner APK count exceeds limit %d; skipping remaining entries", maxInnerAPKs),
-			})
-			break
-		}
-		attempted++
 		inner, err := openNestedZip(zr, f.Name, maxEntryBytes)
 		if err != nil {
 			// Size-limit failures are typically asset/OBB splits with
@@ -145,6 +136,18 @@ func OpenAllInnerAPKs(zr *zip.Reader, maxEntryBytes int64) ([]NamedZipReader, []
 		if !containsDEX(inner) {
 			continue
 		}
+		// Count only DEX-bearing splits against the limit so that
+		// non-DEX splits (asset packs, resource-only) do not exhaust
+		// the budget before real code splits are reached.
+		if attempted >= maxInnerAPKs {
+			diags = append(diags, Diagnostic{
+				Code:     "dex.too_many_inner_apks",
+				Severity: "warn",
+				Message:  fmt.Sprintf("inner APK count exceeds limit %d; skipping remaining entries", maxInnerAPKs),
+			})
+			break
+		}
+		attempted++
 		readers = append(readers, NamedZipReader{Name: f.Name, Reader: inner})
 	}
 	return readers, diags

@@ -208,6 +208,48 @@ func TestOpenAllInnerAPKs_SkipsNoDEXSplits(t *testing.T) {
 	assert.Empty(t, diags, "non-DEX splits should be silently filtered")
 }
 
+func TestOpenAllInnerAPKs_NonDEXSplitsDoNotCountAgainstLimit(t *testing.T) {
+	t.Parallel()
+
+	dexAPK := makeInnerAPKWithDEX(t)
+	noDexAPK := makeInnerAPKNoDEX(t)
+
+	var outerBuf bytes.Buffer
+	outerW := zip.NewWriter(&outerBuf)
+
+	// Add many non-DEX splits — these should NOT count against the limit.
+	for i := range maxInnerAPKs + 50 {
+		name := fmt.Sprintf("resource_%d.apk", i)
+		w, err := outerW.Create(name)
+		require.NoError(t, err)
+		_, err = w.Write(noDexAPK)
+		require.NoError(t, err)
+	}
+	// Add one DEX-bearing split after all the non-DEX ones.
+	w, err := outerW.Create("base.apk")
+	require.NoError(t, err)
+	_, err = w.Write(dexAPK)
+	require.NoError(t, err)
+
+	require.NoError(t, outerW.Close())
+
+	outerReader := bytes.NewReader(outerBuf.Bytes())
+	zr, err := zip.NewReader(outerReader, int64(outerBuf.Len()))
+	require.NoError(t, err)
+
+	readers, diags := OpenAllInnerAPKs(zr, 10<<20)
+
+	// The DEX-bearing split should be found despite many non-DEX splits.
+	require.Len(t, readers, 1)
+	assert.Equal(t, "base.apk", readers[0].Name)
+
+	// No "too many" diagnostic since only 1 DEX split was counted.
+	for _, d := range diags {
+		assert.NotEqual(t, "dex.too_many_inner_apks", d.Code,
+			"non-DEX splits should not trigger the limit")
+	}
+}
+
 func TestOpenAllInnerAPKs_PacketNameNotFiltered(t *testing.T) {
 	t.Parallel()
 
