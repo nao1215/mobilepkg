@@ -214,6 +214,11 @@ func TestIsPlausibleHostname(t *testing.T) {
 		{"wifi-not-enabled", false},
 		{"www.", false},
 		{"", false},
+		// Bare TLDs and www.<TLD> should be filtered.
+		{"com", false},
+		{"org", false},
+		{"www.com", false},
+		{"www.org", false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.host, func(t *testing.T) {
@@ -254,6 +259,40 @@ func TestIsKnownLibraryClass(t *testing.T) {
 			assert.Equal(t, tt.expected, isKnownLibraryClass(tt.class))
 		})
 	}
+}
+
+func TestCleartextTraffic_SpecAndDocURLsExcluded(t *testing.T) {
+	t.Parallel()
+
+	df := buildTestDEXWithStrings(t, []string{
+		"http://dashif.org/guidelines/mpd",
+		"http://logback.qos.ch/manual/configuration.html",
+		"http://www.example.com/test",
+		"http://www.ietf.org/rfc/rfc2396.txt",
+		"http://developer.android.com/guide",
+		"http://semver.org/",
+	})
+
+	ctx := &Context{DexFiles: []*dex.File{df}}
+	rule := &cleartextTrafficRule{}
+	findings := rule.Match(ctx)
+
+	assert.Empty(t, findings, "specification and documentation URLs should be excluded")
+}
+
+func TestCleartextTraffic_BareTLDExcluded(t *testing.T) {
+	t.Parallel()
+
+	df := buildTestDEXWithStrings(t, []string{
+		"http://www.com/path",
+		"http://com/something",
+	})
+
+	ctx := &Context{DexFiles: []*dex.File{df}}
+	rule := &cleartextTrafficRule{}
+	findings := rule.Match(ctx)
+
+	assert.Empty(t, findings, "bare TLD hostnames should be excluded")
 }
 
 func TestHardcodedSecrets_Deduplication(t *testing.T) {

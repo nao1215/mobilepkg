@@ -21,9 +21,10 @@ var localhostHosts = map[string]struct{}{
 }
 
 // cleartextExclusions filters out known non-URL strings that start with "http://".
-// These are XML namespace URIs, specification references, and example domains
-// that are not actual cleartext traffic destinations.
+// These are XML namespace URIs, specification references, example domains,
+// and documentation URLs that are not actual cleartext traffic destinations.
 var cleartextExclusions = []string{
+	// XML/schema namespaces
 	"http://schemas.android.com",
 	"http://www.w3.org",
 	"http://ns.adobe.com",
@@ -33,14 +34,40 @@ var cleartextExclusions = []string{
 	"http://www.xml.org",
 	"http://apache.org",
 	"http://www.apache.org",
-	"http://example.com",
-	"http://example.org",
 	"http://purl.org",
 	"http://json-schema.org",
 	"http://www.json.org",
 	"http://docs.oasis-open.org",
 	"http://relaxng.org",
 	"http://schemas.microsoft.com",
+	"http://schemas.xmlsoap.org",
+	"http://www.ietf.org",
+	"http://tools.ietf.org",
+	"http://www.iso.org",
+	// Example/test domains (RFC 2606 / RFC 6761)
+	"http://example.com",
+	"http://example.org",
+	"http://example.net",
+	"http://www.example.com",
+	"http://www.example.org",
+	"http://www.example.net",
+	// Specification and documentation URLs
+	"http://dashif.org",
+	"http://www.dashif.org",
+	"http://id3.org",
+	"http://www.id3.org",
+	"http://www.unicode.org",
+	"http://www.rfc-editor.org",
+	"http://semver.org",
+	"http://opensource.org",
+	"http://creativecommons.org",
+	"http://developer.android.com",
+	"http://developer.apple.com",
+	// Logging/library documentation
+	"http://logback.qos.ch",
+	"http://logging.apache.org",
+	"http://slf4j.org",
+	"http://www.slf4j.org",
 }
 
 func (r *cleartextTrafficRule) Match(ctx *Context) []Finding {
@@ -108,6 +135,8 @@ var implausibleHosts = map[string]struct{}{
 //   - empty hostnames
 //   - trailing-dot fragments like "www." (incomplete domain)
 //   - known false-positive hostnames (e.g. "wifi-not-enabled")
+//   - bare TLDs (e.g. "com", "org", "net") that appear as partial hostnames
+//   - "www.<TLD>" without a real domain (e.g. "www.com")
 //
 // Single-label hostnames (e.g. "intranet", "metadata", "api") are kept
 // because they can be valid internal endpoints in mobile environments.
@@ -122,7 +151,33 @@ func isPlausibleHostname(host string) bool {
 	if _, ok := implausibleHosts[host]; ok {
 		return false
 	}
+	// Bare TLDs or "www.<TLD>" are not real destinations.
+	if isBareTLD(host) {
+		return false
+	}
+	lower := strings.ToLower(host)
+	if strings.HasPrefix(lower, "www.") {
+		if isBareTLD(strings.TrimPrefix(lower, "www.")) {
+			return false
+		}
+	}
 	return true
+}
+
+// commonTLDs is a set of common top-level domains used to filter out
+// bare TLD hostnames that appear in string tables.
+var commonTLDs = map[string]struct{}{
+	"com": {}, "org": {}, "net": {}, "io": {},
+	"edu": {}, "gov": {}, "mil": {}, "int": {},
+	"co": {}, "us": {}, "uk": {}, "de": {}, "fr": {},
+	"jp": {}, "cn": {}, "ru": {}, "br": {}, "in": {},
+	"au": {}, "ca": {}, "kr": {}, "it": {}, "es": {},
+}
+
+// isBareTLD returns true if the host is a bare top-level domain.
+func isBareTLD(host string) bool {
+	_, ok := commonTLDs[strings.ToLower(host)]
+	return ok
 }
 
 func isCleartextExcluded(s string) bool {
