@@ -1,5 +1,5 @@
 # mobilepkg top-level CLI contract (cmd/mobilepkg/main.go), written from the
-# CLI's documented behaviour. Run with:
+# CLI's documented behavior. Run with:
 #   make e2e   (or e2e/run.sh)
 version: "1"
 

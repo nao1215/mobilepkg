@@ -5,7 +5,7 @@
 # hermetic: it inspects a package file in-process (no Android SDK / Xcode /
 # device / network). The only committed fixture is the small intentionally-
 # vulnerable AndroGoat APK; the specs reach it via $MOBILEPKG_TESTDATA so the
-# documented CLI behaviour cannot silently rot.
+# documented CLI behavior cannot silently rot.
 #
 # The test DEFINITIONS are atago YAML — this script is only the environment
 # bootstrap (a plain shell program, not a test framework).

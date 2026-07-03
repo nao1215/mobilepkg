@@ -1,5 +1,5 @@
 # mobilepkg error handling: bad usage, missing files, unknown formats, and
-# unrecognised package contents must fail with a nonzero exit and a message on
+# unrecognized package contents must fail with a nonzero exit and a message on
 # stderr (stdout stays clean for pipelines). Run with:
 #   make e2e   (or e2e/run.sh)
 version: "1"
