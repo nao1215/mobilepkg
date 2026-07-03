@@ -1,4 +1,4 @@
-.PHONY: build test lint clean tools install
+.PHONY: build test e2e lint clean tools install
 
 APP      = mobilepkg
 VERSION  = $(shell git describe --tags --abbrev=0 2>/dev/null || echo dev)
@@ -13,6 +13,9 @@ install:
 test:
 	go test -v -count=1 -coverprofile=cover.out ./...
 	go tool cover -html=cover.out -o cover.html
+
+e2e:
+	./e2e/run.sh
 
 lint:
 	golangci-lint run ./...
