@@ -36,8 +36,18 @@ cleanup() { rm -rf "$TMP"; }
 trap cleanup EXIT
 mkdir -p "$TMP/bin"
 
-echo "e2e: building mobilepkg..."
-(cd "$REPO_ROOT" && env CGO_ENABLED=0 go build -o "$TMP/bin/mobilepkg" ./cmd/mobilepkg)
+# COVER=1 builds a coverage-instrumented binary and requires GOCOVERDIR so the
+# combined `make coverage` target can collect this run's covdata. atago passes
+# GOCOVERDIR through to the mobilepkg child processes. The default (unset COVER)
+# path is unchanged so `make e2e` stays fast and identical.
+if [ -n "${COVER:-}" ]; then
+	: "${GOCOVERDIR:?COVER=1 requires GOCOVERDIR to be set (see scripts/coverage.sh)}"
+	echo "e2e: building coverage-instrumented mobilepkg..."
+	(cd "$REPO_ROOT" && env CGO_ENABLED=0 go build -cover -covermode=atomic -coverpkg=./... -o "$TMP/bin/mobilepkg" ./cmd/mobilepkg)
+else
+	echo "e2e: building mobilepkg..."
+	(cd "$REPO_ROOT" && env CGO_ENABLED=0 go build -o "$TMP/bin/mobilepkg" ./cmd/mobilepkg)
+fi
 
 # Put the e2e-built mobilepkg first on PATH so the specs exercise that binary.
 export PATH="$TMP/bin:$PATH"

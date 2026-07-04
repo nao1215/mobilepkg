@@ -16,6 +16,13 @@
 coverage.*
 *.coverprofile
 profile.cov
+# `make coverage` scratch: raw covdata (unit + e2e) and the merged dir. The
+# combined coverage.out / cover.html are regenerated, not committed.
+.coverage/
+# ...but the octocov-generated README badge and the coverage script are
+# committed on purpose (the broad `coverage.*` above would otherwise skip them).
+!doc/coverage.svg
+!scripts/coverage.sh
 
 # Dependency directories (remove the comment below to include it)
 # vendor/

@@ -7,26 +7,58 @@ on:
   pull_request:
     branches: [main]
 
+# octocov reads/writes the Actions-artifact datastore (diff/report in
+# .octocov.yml) and comments coverage on pull requests; contents:write lets the
+# push-to-main run commit the regenerated coverage badge back.
+permissions:
+  contents: write
+  actions: write
+  pull-requests: write
+
 jobs:
-  unit_test:
-    name: Unit test (linux)
+  coverage:
+    name: Coverage (unit + e2e)
 
     strategy:
       matrix:
         platform: [ubuntu-latest]
 
     runs-on: ${{ matrix.platform }}
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
-          go-version: "1"
+          go-version-file: "go.mod"
           check-latest: true
 
-      - name: Run tests with coverage report output
-        run: go test -cover -coverpkg=./... -coverprofile=coverage.out ./...
+      # The combined coverage runs the self-hosted atago E2E suite against a
+      # `go build -cover` mobilepkg and merges its covdata with the unit-test
+      # covdata (see scripts/coverage.sh). The E2E is fully hermetic, so atago
+      # is the only extra dependency.
+      - name: Install atago
+        uses: nao1215/setup-atago@e4b6719aea547a68e6c15252222babab7f492a88 # v0.1.1
+        with:
+          version: v0.2.0
 
-      - uses: k1LoW/octocov-action@v1
+      - name: Run combined unit + E2E coverage
+        run: make coverage
+
+      - uses: k1LoW/octocov-action@b3b6ee60482a667950f87553abf1df63217235d9 # v1.5.1
+
+      # On push to main, commit the octocov-regenerated coverage badge back so
+      # the README badge stays current. `[skip ci]` prevents a workflow loop.
+      - name: Commit coverage badge
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          if ! git diff --quiet -- doc/coverage.svg; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add doc/coverage.svg
+            git commit -m "chore(coverage): update coverage badge [skip ci]"
+            git push
+          else
+            echo "coverage badge unchanged"
+          fi
