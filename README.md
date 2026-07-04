@@ -1,7 +1,7 @@
 # mobilepkg
 
 [![MultiPlatformUnitTest](https://github.com/nao1215/mobilepkg/actions/workflows/test.yml/badge.svg)](https://github.com/nao1215/mobilepkg/actions/workflows/test.yml)
-[![Coverage](https://github.com/nao1215/mobilepkg/actions/workflows/coverage.yml/badge.svg)](https://github.com/nao1215/mobilepkg/actions/workflows/coverage.yml)
+[![Coverage](doc/coverage.svg)](https://github.com/nao1215/mobilepkg/actions/workflows/coverage.yml)
 [![Build](https://github.com/nao1215/mobilepkg/actions/workflows/build.yml/badge.svg)](https://github.com/nao1215/mobilepkg/actions/workflows/build.yml)
 [![reviewdog](https://github.com/nao1215/mobilepkg/actions/workflows/reviewdog.yml/badge.svg)](https://github.com/nao1215/mobilepkg/actions/workflows/reviewdog.yml)
 [![Go Reference](https://pkg.go.dev/badge/github.com/nao1215/mobilepkg.svg)](https://pkg.go.dev/github.com/nao1215/mobilepkg)

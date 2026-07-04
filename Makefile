@@ -1,4 +1,4 @@
-.PHONY: build test e2e lint clean tools install
+.PHONY: build test e2e coverage lint clean tools install
 
 APP      = mobilepkg
 VERSION  = $(shell git describe --tags --abbrev=0 2>/dev/null || echo dev)
@@ -17,11 +17,15 @@ test:
 e2e:
 	./e2e/run.sh
 
+coverage:
+	bash ./scripts/coverage.sh
+
 lint:
 	golangci-lint run ./...
 
 clean:
-	rm -f $(APP) cover.out cover.html
+	rm -f $(APP) cover.out cover.html coverage.out
+	rm -rf .coverage
 
 tools:
 	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
