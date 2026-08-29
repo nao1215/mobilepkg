@@ -17,6 +17,11 @@ scenarios:
           stderr:
             contains: "Usage: mobilepkg inspect"
 
+  # The tail of this message is the operating system's, not mobilepkg's: Go
+  # surfaces "no such file or directory" on Unix and "The system cannot find the
+  # file specified." on Windows. What mobilepkg owns -- and what this asserts --
+  # is that the failure is attributed to the tool and names the file the user
+  # asked for.
   - name: inspect on a missing file fails
     steps:
       - run:
@@ -24,7 +29,9 @@ scenarios:
       - assert:
           exit_code: { not: 0 }
           stderr:
-            contains: "no such file"
+            contains:
+              - "mobilepkg inspect: open"
+              - "does_not_exist.apk"
 
   - name: inspect rejects an unknown output format
     steps:
