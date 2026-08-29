@@ -48,14 +48,14 @@ func InspectAAB(r io.ReaderAt, size int64, sections uint64, iconSizePx int, maxE
 
 	// Identity (package from protobuf, label best-effort from protobuf)
 	if sections&(1<<bitIdentity) != 0 && rootElem != nil {
-		result.PackageName = xmlAttrValue(rootElem, "package")
+		result.PackageName = xmlAttrValue(rootElem, attrPackage)
 		result.Label = findAABApplicationLabel(xmlNode)
 	}
 
 	// Version
 	if sections&(1<<bitVersion) != 0 && rootElem != nil {
-		result.VersionName = xmlAttrValue(rootElem, "versionName")
-		result.VersionCode = xmlAttrValue(rootElem, "versionCode")
+		result.VersionName = xmlAttrValue(rootElem, attrVersionName)
+		result.VersionCode = xmlAttrValue(rootElem, attrVersionCode)
 	}
 
 	// EntryPoint
@@ -76,9 +76,9 @@ func InspectAAB(r io.ReaderAt, size int64, sections uint64, iconSizePx int, maxE
 	// PlatformRaw
 	if sections&(1<<bitPlatformRaw) != 0 && rootElem != nil {
 		result.RawManifest = map[string]any{
-			"package":     xmlAttrValue(rootElem, "package"),
-			"versionCode": xmlAttrValue(rootElem, "versionCode"),
-			"versionName": xmlAttrValue(rootElem, "versionName"),
+			attrPackage:     xmlAttrValue(rootElem, attrPackage),
+			attrVersionCode: xmlAttrValue(rootElem, attrVersionCode),
+			attrVersionName: xmlAttrValue(rootElem, attrVersionName),
 		}
 	}
 
@@ -93,7 +93,7 @@ func InspectAAB(r io.ReaderAt, size int64, sections uint64, iconSizePx int, maxE
 			if needIcon {
 				diags = append(diags, Diagnostic{
 					Code:     "icon.not_found",
-					Severity: "warn",
+					Severity: sevWarn,
 					Message:  fmt.Sprintf("failed to initialise AAB parser for icon: %v", libErr),
 				})
 			}
@@ -118,14 +118,14 @@ func InspectAAB(r io.ReaderAt, size int64, sections uint64, iconSizePx int, maxE
 					} else {
 						diags = append(diags, Diagnostic{
 							Code:     "icon.encode_failed",
-							Severity: "warn",
+							Severity: sevWarn,
 							Message:  fmt.Sprintf("failed to encode icon as PNG: %v", encErr),
 						})
 					}
 				} else {
 					diags = append(diags, Diagnostic{
 						Code:     "icon.not_found",
-						Severity: "warn",
+						Severity: sevWarn,
 						Message:  fmt.Sprintf("failed to extract icon: %v", iconErr),
 					})
 				}

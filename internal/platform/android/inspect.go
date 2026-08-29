@@ -193,14 +193,14 @@ func Inspect(zr *zip.Reader, sections uint64, r io.ReaderAt, size int64, maxEntr
 			} else {
 				diags = append(diags, Diagnostic{
 					Code:     "icon.read_failed",
-					Severity: "warn",
+					Severity: sevWarn,
 					Message:  fmt.Sprintf("failed to read icon %s: %v", iconPath, readErr),
 				})
 			}
 		} else {
 			diags = append(diags, Diagnostic{
 				Code:     "icon.not_resolved",
-				Severity: "warn",
+				Severity: sevWarn,
 				Message:  "icon path is a resource reference that could not be resolved",
 			})
 		}
@@ -210,9 +210,9 @@ func Inspect(zr *zip.Reader, sections uint64, r io.ReaderAt, size int64, maxEntr
 	// and platform data access.
 	if sections&(1<<bitPlatformRaw) != 0 {
 		raw := map[string]any{
-			"package":               manifest.Package,
-			"versionCode":           manifest.VersionCode,
-			"versionName":           manifest.VersionName,
+			attrPackage:             manifest.Package,
+			attrVersionCode:         manifest.VersionCode,
+			attrVersionName:         manifest.VersionName,
 			"label":                 manifest.App.Label,
 			"icon":                  manifest.App.Icon,
 			"debuggable":            manifest.App.Debuggable,
@@ -269,7 +269,7 @@ func Inspect(zr *zip.Reader, sections uint64, r io.ReaderAt, size int64, maxEntr
 		if sigErr != nil {
 			diags = append(diags, Diagnostic{
 				Code:     "signing.extraction_failed",
-				Severity: "warn",
+				Severity: sevWarn,
 				Message:  fmt.Sprintf("failed to extract signing info: %v", sigErr),
 			})
 		} else if sigInfo != nil {

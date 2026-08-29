@@ -6,6 +6,10 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+### Fixed
+
+- Tagged releases run again. The release workflow lints as an enforced gate with `version: latest`, so a newer golangci-lint failed the v0.5.0 tag on 40 pre-existing `goconst` findings in code that had not changed. The findings are fixed, and both the action and the linter version are now pinned so a future linter release cannot fail a tag on its own.
+
 ## [0.5.0] - 2026-08-30
 
 ### Added

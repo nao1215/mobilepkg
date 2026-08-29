@@ -15,10 +15,15 @@ jobs:
         with:
           go-version: "stable"
       - run: go test -race ./...
+      # This lint is an enforced gate, unlike the reviewdog job on pull requests
+      # which only annotates changed lines at warning level. Both the action and
+      # the linter are pinned: with `version: latest` a new golangci-lint release
+      # could fail a tag on code that had not changed, which is exactly how the
+      # v0.5.0 tag failed on 40 pre-existing goconst findings.
       - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v9
+        uses: golangci/golangci-lint-action@d583c34f0599d37dbac4a198b9c83201be380893 # v9.3.0
         with:
-          version: latest
+          version: v2.13.2
 
   release:
     name: Release

@@ -38,7 +38,7 @@ func probeZip(zr *zip.Reader) probeResult {
 		name := f.Name
 
 		switch {
-		case name == "AndroidManifest.xml":
+		case name == pathAndroidManifest:
 			hasRootAndroidManifest = true
 		case name == "manifest.json":
 			hasManifestJSON = true
