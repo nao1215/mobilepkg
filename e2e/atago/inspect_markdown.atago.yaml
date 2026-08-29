@@ -2,7 +2,7 @@
 # $GITHUB_STEP_SUMMARY / PR comments. These assertions pin the section
 # structure and the leading package facts so the documented Markdown layout
 # cannot silently rot. Run with:
-#   make e2e   (or e2e/run.sh)
+#   make e2e   (or go run ./e2e/runner)
 version: "1"
 
 suite:
@@ -11,9 +11,9 @@ suite:
 scenarios:
   - name: renders the report heading and package table
     steps:
-      - run:
-          shell: true
-          command: cp "$MOBILEPKG_TESTDATA/android/androgoat_rich.apk" app.apk
+      - fixture:
+          file: app.apk
+          from: ../../testdata/android/androgoat_rich.apk
       - run:
           command: mobilepkg inspect --format markdown app.apk
       - assert:
@@ -26,9 +26,9 @@ scenarios:
 
   - name: includes the Top Findings and Exported Components sections
     steps:
-      - run:
-          shell: true
-          command: cp "$MOBILEPKG_TESTDATA/android/androgoat_rich.apk" app.apk
+      - fixture:
+          file: app.apk
+          from: ../../testdata/android/androgoat_rich.apk
       - run:
           command: mobilepkg inspect --format markdown app.apk
       - assert:
@@ -39,9 +39,9 @@ scenarios:
 
   - name: md is accepted as an alias for markdown
     steps:
-      - run:
-          shell: true
-          command: cp "$MOBILEPKG_TESTDATA/android/androgoat_rich.apk" app.apk
+      - fixture:
+          file: app.apk
+          from: ../../testdata/android/androgoat_rich.apk
       - run:
           command: mobilepkg inspect --format md app.apk
       - assert:

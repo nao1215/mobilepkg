@@ -2,7 +2,7 @@
 # JSON. The only committed fixture is the AndroGoat APK, so the hermetic case
 # compares it against itself: identity/version/entry must be unchanged and the
 # platform/format echoed back. Run with:
-#   make e2e   (or e2e/run.sh)
+#   make e2e   (or go run ./e2e/runner)
 version: "1"
 
 suite:
@@ -11,9 +11,9 @@ suite:
 scenarios:
   - name: comparing a package with itself reports no identity or version change
     steps:
-      - run:
-          shell: true
-          command: cp "$MOBILEPKG_TESTDATA/android/androgoat_rich.apk" app.apk
+      - fixture:
+          file: app.apk
+          from: ../../testdata/android/androgoat_rich.apk
       - run:
           command: mobilepkg compare app.apk app.apk
       - assert:
@@ -32,9 +32,9 @@ scenarios:
 
   - name: diff is an alias for compare
     steps:
-      - run:
-          shell: true
-          command: cp "$MOBILEPKG_TESTDATA/android/androgoat_rich.apk" app.apk
+      - fixture:
+          file: app.apk
+          from: ../../testdata/android/androgoat_rich.apk
       - run:
           command: mobilepkg diff app.apk app.apk
       - assert:
@@ -44,9 +44,9 @@ scenarios:
 
   - name: compare requires two files
     steps:
-      - run:
-          shell: true
-          command: cp "$MOBILEPKG_TESTDATA/android/androgoat_rich.apk" app.apk
+      - fixture:
+          file: app.apk
+          from: ../../testdata/android/androgoat_rich.apk
       - run:
           command: mobilepkg compare app.apk
       - assert:

@@ -1,7 +1,7 @@
 # mobilepkg error handling: bad usage, missing files, unknown formats, and
 # unrecognized package contents must fail with a nonzero exit and a message on
 # stderr (stdout stays clean for pipelines). Run with:
-#   make e2e   (or e2e/run.sh)
+#   make e2e   (or go run ./e2e/runner)
 version: "1"
 
 suite:
@@ -28,9 +28,9 @@ scenarios:
 
   - name: inspect rejects an unknown output format
     steps:
-      - run:
-          shell: true
-          command: cp "$MOBILEPKG_TESTDATA/android/androgoat_rich.apk" app.apk
+      - fixture:
+          file: app.apk
+          from: ../../testdata/android/androgoat_rich.apk
       - run:
           command: mobilepkg inspect --format xml app.apk
       - assert:

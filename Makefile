@@ -15,7 +15,7 @@ test:
 	go tool cover -html=cover.out -o cover.html
 
 e2e:
-	./e2e/run.sh
+	go run ./e2e/runner
 
 coverage:
 	bash ./scripts/coverage.sh
@@ -29,3 +29,7 @@ clean:
 
 tools:
 	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	# @latest on purpose: locally we want to find out immediately when a new
+	# atago breaks a spec. CI pins an exact version (see the "Install atago"
+	# step in .github/workflows/) so a build stays reproducible.
+	go install github.com/nao1215/atago@latest
