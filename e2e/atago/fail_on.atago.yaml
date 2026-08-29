@@ -2,7 +2,7 @@
 # finding meets the severity threshold and embeds a verdict in the JSON. The
 # AndroGoat fixture carries error-severity findings, so every threshold trips
 # the gate. Run with:
-#   make e2e   (or e2e/run.sh)
+#   make e2e   (or go run ./e2e/runner)
 version: "1"
 
 suite:
@@ -11,9 +11,9 @@ suite:
 scenarios:
   - name: "--fail-on error exits 1 on an app with error findings"
     steps:
-      - run:
-          shell: true
-          command: cp "$MOBILEPKG_TESTDATA/android/androgoat_rich.apk" app.apk
+      - fixture:
+          file: app.apk
+          from: ../../testdata/android/androgoat_rich.apk
       - run:
           command: mobilepkg inspect --fail-on error app.apk
       - assert:
@@ -21,9 +21,9 @@ scenarios:
 
   - name: "--fail-on warn also exits 1 (warnings present)"
     steps:
-      - run:
-          shell: true
-          command: cp "$MOBILEPKG_TESTDATA/android/androgoat_rich.apk" app.apk
+      - fixture:
+          file: app.apk
+          from: ../../testdata/android/androgoat_rich.apk
       - run:
           command: mobilepkg inspect --fail-on warn app.apk
       - assert:
@@ -31,13 +31,14 @@ scenarios:
 
   - name: "--fail-on embeds a failing verdict with triggering findings"
     steps:
+      - fixture:
+          file: app.apk
+          from: ../../testdata/android/androgoat_rich.apk
+      # The nonzero exit is expected here and deliberately not asserted: this
+      # scenario is about the verdict embedded in stdout, which the gate emits
+      # either way (the exit code itself is pinned by the scenarios above).
       - run:
-          shell: true
-          command: cp "$MOBILEPKG_TESTDATA/android/androgoat_rich.apk" app.apk
-      # The nonzero exit is expected; capture stdout so the JSON can be asserted.
-      - run:
-          shell: true
-          command: mobilepkg inspect --fail-on error app.apk || true
+          command: mobilepkg inspect --fail-on error app.apk
       - assert:
           stdout:
             json: { path: "$.verdict.passed", equals: false }
@@ -53,9 +54,9 @@ scenarios:
   # mobilepkg later validates the flag and errors instead, update this scenario.
   - name: an unknown --fail-on threshold still trips the gate (lenient today)
     steps:
-      - run:
-          shell: true
-          command: cp "$MOBILEPKG_TESTDATA/android/androgoat_rich.apk" app.apk
+      - fixture:
+          file: app.apk
+          from: ../../testdata/android/androgoat_rich.apk
       - run:
           command: mobilepkg inspect --fail-on bogus app.apk
       - assert:

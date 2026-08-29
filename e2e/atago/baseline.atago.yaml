@@ -2,7 +2,7 @@
 # against a previously saved report and embeds the diff under result.diff.
 # Diffing a report against the SAME package must report no identity/version
 # change. Run with:
-#   make e2e   (or e2e/run.sh)
+#   make e2e   (or go run ./e2e/runner)
 version: "1"
 
 suite:
@@ -11,13 +11,13 @@ suite:
 scenarios:
   - name: diffing a package against its own baseline reports no changes
     steps:
-      - run:
-          shell: true
-          command: cp "$MOBILEPKG_TESTDATA/android/androgoat_rich.apk" app.apk
+      - fixture:
+          file: app.apk
+          from: ../../testdata/android/androgoat_rich.apk
       # Save a baseline report, then inspect the same APK against it.
       - run:
-          shell: true
-          command: mobilepkg inspect app.apk > base.json
+          command: mobilepkg inspect app.apk
+          stdout_to: base.json
       - run:
           command: mobilepkg inspect --baseline base.json app.apk
       - assert:
@@ -33,9 +33,9 @@ scenarios:
 
   - name: a missing baseline file is an error
     steps:
-      - run:
-          shell: true
-          command: cp "$MOBILEPKG_TESTDATA/android/androgoat_rich.apk" app.apk
+      - fixture:
+          file: app.apk
+          from: ../../testdata/android/androgoat_rich.apk
       - run:
           command: mobilepkg inspect --baseline no_such_baseline.json app.apk
       - assert:

@@ -25,12 +25,12 @@ echo ">> unit coverage -> ${cov}/unit"
 go test -count=1 -cover -covermode=atomic -coverpkg=./... ./... \
 	-args -test.gocoverdir="${cov}/unit"
 
-# 2. Self-hosted E2E. e2e/run.sh builds a coverage-instrumented mobilepkg when
+# 2. Self-hosted E2E. e2e/runner builds a coverage-instrumented mobilepkg when
 #    COVER is set and puts it first on PATH; atago passes GOCOVERDIR through to
 #    the mobilepkg child processes (the specs do not use clear_env), so each run
 #    writes its own covdata into ${cov}/e2e.
 echo ">> e2e coverage -> ${cov}/e2e"
-COVER=1 GOCOVERDIR="${cov}/e2e" "${root}/e2e/run.sh"
+COVER=1 GOCOVERDIR="${cov}/e2e" go run ./e2e/runner
 
 # 3. Merge the raw covdata and render the combined text profile + HTML report.
 echo ">> merging unit + e2e covdata -> coverage.out"

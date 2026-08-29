@@ -1,7 +1,7 @@
 # Runs the representative commands shown in mobilepkg's README against the
 # committed AndroGoat fixture so the documented examples cannot silently rot.
 # Run with:
-#   make e2e   (or e2e/run.sh)
+#   make e2e   (or go run ./e2e/runner)
 #
 # README CLI section:
 #   mobilepkg inspect app.apk                       # JSON output (default)
@@ -17,9 +17,9 @@ suite:
 scenarios:
   - name: "inspect app.apk (default JSON)"
     steps:
-      - run:
-          shell: true
-          command: cp "$MOBILEPKG_TESTDATA/android/androgoat_rich.apk" app.apk
+      - fixture:
+          file: app.apk
+          from: ../../testdata/android/androgoat_rich.apk
       - run:
           command: mobilepkg inspect app.apk
       - assert:
@@ -29,9 +29,9 @@ scenarios:
 
   - name: "inspect --format markdown app.apk"
     steps:
-      - run:
-          shell: true
-          command: cp "$MOBILEPKG_TESTDATA/android/androgoat_rich.apk" app.apk
+      - fixture:
+          file: app.apk
+          from: ../../testdata/android/androgoat_rich.apk
       - run:
           command: mobilepkg inspect --format markdown app.apk
       - assert:
@@ -41,9 +41,9 @@ scenarios:
 
   - name: "inspect --fail-on warn app.apk (CI gate trips on AndroGoat)"
     steps:
-      - run:
-          shell: true
-          command: cp "$MOBILEPKG_TESTDATA/android/androgoat_rich.apk" app.apk
+      - fixture:
+          file: app.apk
+          from: ../../testdata/android/androgoat_rich.apk
       - run:
           command: mobilepkg inspect --fail-on warn app.apk
       - assert:
@@ -51,12 +51,12 @@ scenarios:
 
   - name: "inspect --baseline prev.json app.apk"
     steps:
+      - fixture:
+          file: app.apk
+          from: ../../testdata/android/androgoat_rich.apk
       - run:
-          shell: true
-          command: cp "$MOBILEPKG_TESTDATA/android/androgoat_rich.apk" app.apk
-      - run:
-          shell: true
-          command: mobilepkg inspect app.apk > prev.json
+          command: mobilepkg inspect app.apk
+          stdout_to: prev.json
       - run:
           command: mobilepkg inspect --baseline prev.json app.apk
       - assert:
@@ -66,12 +66,12 @@ scenarios:
 
   - name: "compare old.apk new.apk"
     steps:
-      - run:
-          shell: true
-          command: cp "$MOBILEPKG_TESTDATA/android/androgoat_rich.apk" old.apk
-      - run:
-          shell: true
-          command: cp "$MOBILEPKG_TESTDATA/android/androgoat_rich.apk" new.apk
+      - fixture:
+          file: old.apk
+          from: ../../testdata/android/androgoat_rich.apk
+      - fixture:
+          file: new.apk
+          from: ../../testdata/android/androgoat_rich.apk
       - run:
           command: mobilepkg compare old.apk new.apk
       - assert:

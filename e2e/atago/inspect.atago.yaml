@@ -2,10 +2,12 @@
 # (an intentionally-vulnerable APK). The assertions pin the stable package
 # facts and the security findings AndroGoat is known to trigger, so a
 # regression in manifest/DEX/signing analysis is caught. Run with:
-#   make e2e   (or e2e/run.sh)
+#   make e2e   (or go run ./e2e/runner)
 #
-# The fixture is copied into the per-scenario ${workdir} from $MOBILEPKG_TESTDATA
-# (this repo's testdata/), then inspected by bare relative name.
+# Each scenario copies the fixture into its own ${workdir} with a `fixture`
+# step, whose `from:` resolves against this spec's directory, then inspects it
+# by bare relative name. No step shells out or reads a host env var, which is
+# what lets this suite run unchanged on Windows.
 version: "1"
 
 suite:
@@ -14,9 +16,9 @@ suite:
 scenarios:
   - name: reports platform and format for an APK
     steps:
-      - run:
-          shell: true
-          command: cp "$MOBILEPKG_TESTDATA/android/androgoat_rich.apk" app.apk
+      - fixture:
+          file: app.apk
+          from: ../../testdata/android/androgoat_rich.apk
       - run:
           command: mobilepkg inspect app.apk
       - assert:
@@ -29,9 +31,9 @@ scenarios:
 
   - name: extracts identity and version from the manifest
     steps:
-      - run:
-          shell: true
-          command: cp "$MOBILEPKG_TESTDATA/android/androgoat_rich.apk" app.apk
+      - fixture:
+          file: app.apk
+          from: ../../testdata/android/androgoat_rich.apk
       - run:
           command: mobilepkg inspect app.apk
       - assert:
@@ -46,9 +48,9 @@ scenarios:
 
   - name: reports the debuggable and allow_backup manifest flags
     steps:
-      - run:
-          shell: true
-          command: cp "$MOBILEPKG_TESTDATA/android/androgoat_rich.apk" app.apk
+      - fixture:
+          file: app.apk
+          from: ../../testdata/android/androgoat_rich.apk
       - run:
           command: mobilepkg inspect app.apk
       - assert:
@@ -60,9 +62,9 @@ scenarios:
 
   - name: flags a debug-signed APK
     steps:
-      - run:
-          shell: true
-          command: cp "$MOBILEPKG_TESTDATA/android/androgoat_rich.apk" app.apk
+      - fixture:
+          file: app.apk
+          from: ../../testdata/android/androgoat_rich.apk
       - run:
           command: mobilepkg inspect app.apk
       - assert:
@@ -74,9 +76,9 @@ scenarios:
 
   - name: raises an error finding for the debuggable manifest
     steps:
-      - run:
-          shell: true
-          command: cp "$MOBILEPKG_TESTDATA/android/androgoat_rich.apk" app.apk
+      - fixture:
+          file: app.apk
+          from: ../../testdata/android/androgoat_rich.apk
       - run:
           command: mobilepkg inspect app.apk
       - assert:
@@ -85,9 +87,9 @@ scenarios:
 
   - name: flags an unguarded exported content provider
     steps:
-      - run:
-          shell: true
-          command: cp "$MOBILEPKG_TESTDATA/android/androgoat_rich.apk" app.apk
+      - fixture:
+          file: app.apk
+          from: ../../testdata/android/androgoat_rich.apk
       - run:
           command: mobilepkg inspect app.apk
       - assert:
@@ -98,9 +100,9 @@ scenarios:
 
   - name: warns about backup being allowed
     steps:
-      - run:
-          shell: true
-          command: cp "$MOBILEPKG_TESTDATA/android/androgoat_rich.apk" app.apk
+      - fixture:
+          file: app.apk
+          from: ../../testdata/android/androgoat_rich.apk
       - run:
           command: mobilepkg inspect app.apk
       - assert:
@@ -109,9 +111,9 @@ scenarios:
 
   - name: emits schema_version and tool_version envelope fields
     steps:
-      - run:
-          shell: true
-          command: cp "$MOBILEPKG_TESTDATA/android/androgoat_rich.apk" app.apk
+      - fixture:
+          file: app.apk
+          from: ../../testdata/android/androgoat_rich.apk
       - run:
           command: mobilepkg inspect app.apk
       - assert:
@@ -123,9 +125,9 @@ scenarios:
 
   - name: does not emit a verdict without --fail-on
     steps:
-      - run:
-          shell: true
-          command: cp "$MOBILEPKG_TESTDATA/android/androgoat_rich.apk" app.apk
+      - fixture:
+          file: app.apk
+          from: ../../testdata/android/androgoat_rich.apk
       - run:
           command: mobilepkg inspect app.apk
       - assert:
