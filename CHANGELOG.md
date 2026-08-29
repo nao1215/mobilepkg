@@ -18,6 +18,10 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - The end-to-end suite runs against atago v0.21.0, and `make tools` installs the runner.
 - CI builds artifacts, E2E and coverage with the current stable Go toolchain; the unit-test matrix still pins the go.mod floor (1.25) alongside the newest release.
 
+### Security
+
+- `golang.org/x/image` updated to 0.45.0, closing GHSA-affected versions below 0.41.0 in which `golang.org/x/image/tiff` consumes excessive resources while decompressing PackBits data.
+
 ### Fixed
 
 - The GoReleaser configuration is valid for GoReleaser v2 again. It declared no `version:` and used two properties removed in v2 (`snapshot.name_template`, `archives.format_overrides.format`), so the next tagged release would have failed.
