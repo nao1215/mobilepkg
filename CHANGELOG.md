@@ -6,6 +6,8 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-08-30
+
 ### Added
 
 - Scoop bucket for Windows: tagged releases now publish `bucket/mobilepkg.json`, so `scoop bucket add nao1215-mobilepkg https://github.com/nao1215/mobilepkg` installs the CLI.

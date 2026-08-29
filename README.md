@@ -55,9 +55,9 @@ go get github.com/nao1215/mobilepkg                           # library
 Every release ships `tar.gz` archives for Linux and macOS, `zip` archives for Windows, and `.deb`, `.rpm` and `.apk` packages for Linux, all for `amd64`, `arm64` and `386`. Extract the archive and put the `mobilepkg` binary somewhere on your `PATH`, or install the package for your distribution:
 
 ```bash
-sudo dpkg -i mobilepkg_0.4.0_linux_amd64.deb   # Debian, Ubuntu
-sudo rpm -i mobilepkg_0.4.0_linux_amd64.rpm    # Fedora, RHEL
-sudo apk add --allow-untrusted mobilepkg_0.4.0_linux_amd64.apk  # Alpine
+sudo dpkg -i mobilepkg_0.5.0_linux_amd64.deb   # Debian, Ubuntu
+sudo rpm -i mobilepkg_0.5.0_linux_amd64.rpm    # Fedora, RHEL
+sudo apk add --allow-untrusted mobilepkg_0.5.0_linux_amd64.apk  # Alpine
 ```
 
 ### Use Scoop (Windows)
