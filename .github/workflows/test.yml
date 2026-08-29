@@ -8,6 +8,12 @@ on:
     branches: [main]
 
 jobs:
+  # This is the only workflow that pins Go versions. "1.25" is the floor go.mod
+  # declares -- running it here is the only place that claim is checked -- and
+  # "1" tracks the newest release, which is what catches new vet checks and
+  # runtime behavior changes. Every other workflow uses "stable" on purpose:
+  # go.mod says which Go a user may build mobilepkg from, not which toolchain
+  # this repository's artifacts, E2E and coverage should be produced with.
   unit_test:
     name: Unit test
 
@@ -26,9 +32,9 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: ${{ matrix.go }}
 
