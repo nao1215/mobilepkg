@@ -120,7 +120,7 @@ func (r *cleartextTrafficRule) Match(ctx *Context) []Finding {
 			findings = append(findings, Finding{
 				ID:          fmt.Sprintf("dex.cleartext.%s", sanitizeID(host)),
 				Category:    "dex_cleartext",
-				Severity:    "warn",
+				Severity:    sevWarn,
 				Confidence:  "medium",
 				Message:     fmt.Sprintf("cleartext HTTP URL found in DEX strings: %s", host),
 				ArchivePath: ctx.dexName(i),

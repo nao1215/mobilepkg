@@ -11,6 +11,14 @@ type insecureWebViewRule struct{}
 
 func (r *insecureWebViewRule) Name() string { return "InsecureWebView" }
 
+const (
+	// classWebSettings is the DEX class whose setters configure a WebView; every
+	// misconfiguration rule below targets one of its methods.
+	classWebSettings = "android/webkit/WebSettings"
+	// categoryDexWebView groups every WebView finding this file reports.
+	categoryDexWebView = "dex_webview"
+)
+
 // webviewTarget defines a dangerous WebView API call to detect.
 type webviewTarget struct {
 	class     string
@@ -23,29 +31,29 @@ type webviewTarget struct {
 // webviewTargets defines the dangerous WebView API calls to detect.
 var webviewTargets = []webviewTarget{
 	{
-		class:     "android/webkit/WebSettings",
+		class:     classWebSettings,
 		method:    "setJavaScriptEnabled",
-		severity:  "warn",
+		severity:  sevWarn,
 		message:   "WebView JavaScript enabled — may expose app to XSS if loading untrusted content",
 		checkTrue: true,
 	},
 	{
 		class:    "android/webkit/WebView",
 		method:   "addJavascriptInterface",
-		severity: "error",
+		severity: sevError,
 		message:  "WebView JavaScript interface exposed — allows JavaScript to call native methods (critical on API < 17)",
 	},
 	{
-		class:     "android/webkit/WebSettings",
+		class:     classWebSettings,
 		method:    "setAllowFileAccess",
-		severity:  "warn",
+		severity:  sevWarn,
 		message:   "WebView file access enabled — may allow reading local files",
 		checkTrue: true,
 	},
 	{
-		class:     "android/webkit/WebSettings",
+		class:     classWebSettings,
 		method:    "setAllowUniversalAccessFromFileURLs",
-		severity:  "error",
+		severity:  sevError,
 		message:   "WebView universal file access enabled — file:// URLs can access any origin",
 		checkTrue: true,
 	},
@@ -54,7 +62,7 @@ var webviewTargets = []webviewTarget{
 	{
 		class:     "android/webkit/WebView",
 		method:    "setWebContentsDebuggingEnabled",
-		severity:  "warn",
+		severity:  sevWarn,
 		message:   "WebView debugging enabled — allows inspecting WebView content via Chrome DevTools",
 		checkTrue: true,
 	},
@@ -92,7 +100,7 @@ func (r *insecureWebViewRule) Match(ctx *Context) []Finding {
 
 				findings = append(findings, Finding{
 					ID:          fmt.Sprintf("dex.webview.%s.%s", wt.method, sanitizeID(cs.CallerClass)),
-					Category:    "dex_webview",
+					Category:    categoryDexWebView,
 					Severity:    severity,
 					Confidence:  confidence,
 					Message:     msg,
@@ -115,7 +123,7 @@ func (r *insecureWebViewRule) Match(ctx *Context) []Finding {
 				seen[key] = struct{}{}
 				findings = append(findings, Finding{
 					ID:          fmt.Sprintf("dex.webview.loadUrl_http.%s", sanitizeID(cs.CallerClass)),
-					Category:    "dex_webview",
+					Category:    categoryDexWebView,
 					Severity:    sevWarn,
 					Confidence:  confHigh,
 					Message:     fmt.Sprintf("WebView loads cleartext HTTP URL (in %s)", cs.CallerClass),
@@ -140,7 +148,7 @@ func (r *insecureWebViewRule) Match(ctx *Context) []Finding {
 
 			findings = append(findings, Finding{
 				ID:          fmt.Sprintf("dex.webview.ssl_bypass.%s", sanitizeID(cs.CallerClass)),
-				Category:    "dex_webview",
+				Category:    categoryDexWebView,
 				Severity:    severity,
 				Confidence:  confidence,
 				Message:     msg,
@@ -156,7 +164,7 @@ func (r *insecureWebViewRule) Match(ctx *Context) []Finding {
 		// method because the same method may call setMixedContentMode
 		// multiple times with different values (e.g. COMPATIBILITY then
 		// ALWAYS_ALLOW), and only the most dangerous one matters.
-		mixedCalls := df.FindMethodCalls("android/webkit/WebSettings", "setMixedContentMode")
+		mixedCalls := df.FindMethodCalls(classWebSettings, "setMixedContentMode")
 		mixedBest := make(map[string]Finding) // key → worst finding so far
 		for _, cs := range mixedCalls {
 			key := fmt.Sprintf("setMixedContentMode@%s.%s", cs.CallerClass, cs.CallerMethod)
@@ -181,7 +189,7 @@ func (r *insecureWebViewRule) Match(ctx *Context) []Finding {
 
 			f := Finding{
 				ID:          fmt.Sprintf("dex.webview.setMixedContentMode.%s", sanitizeID(cs.CallerClass)),
-				Category:    "dex_webview",
+				Category:    categoryDexWebView,
 				Severity:    severity,
 				Confidence:  confidence,
 				Message:     msg,

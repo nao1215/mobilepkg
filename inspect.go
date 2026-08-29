@@ -239,7 +239,7 @@ func extractReportFromReader(ctx context.Context, r io.ReaderAt, size int64, opt
 		// Other errors (truncated, I/O failures) indicate a corrupt archive.
 		if errors.Is(err, zip.ErrFormat) {
 			return extractionResult{}, &InspectError{
-				Code:    "format.unsupported",
+				Code:    codeUnsupportedFormat,
 				Message: "file is not a valid ZIP archive",
 				Err:     ErrUnsupportedFormat,
 			}
@@ -285,7 +285,7 @@ func extractReportFromReader(ctx context.Context, r io.ReaderAt, size int64, opt
 		rpt, err = inspectIOS(zr, sections, maxEntry)
 	default:
 		return extractionResult{}, &InspectError{
-			Code:    "format.unsupported",
+			Code:    codeUnsupportedFormat,
 			Message: "unrecognized package format",
 			Err:     ErrUnsupportedFormat,
 		}
@@ -371,7 +371,7 @@ func buildAndroidReport(result *android.Result, diags []android.Diagnostic, sect
 			rpt.Permissions = append(rpt.Permissions, Permission{
 				Canonical: canonicalPermission(p),
 				RawName:   p,
-				Source:    "manifest",
+				Source:    categoryManifest,
 			})
 		}
 	}

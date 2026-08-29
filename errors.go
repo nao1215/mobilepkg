@@ -106,7 +106,7 @@ func classifyError(err error) (code, message string, sentinel error) {
 	case errors.Is(err, ErrArchiveCorrupt):
 		return "archive.corrupt", "archive is corrupt or unreadable", ErrArchiveCorrupt
 	case errors.Is(err, ErrUnsupportedFormat):
-		return "format.unsupported", "unsupported package format", ErrUnsupportedFormat
+		return codeUnsupportedFormat, "unsupported package format", ErrUnsupportedFormat
 	case errors.Is(err, android.ErrManifestNotFound),
 		errors.Is(err, ios.ErrInfoPlistNotFound):
 		return "manifest.missing", "primary manifest not found", ErrManifestMissing

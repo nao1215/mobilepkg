@@ -153,9 +153,9 @@ func resultFromXAPKManifest(xm xapkManifest, sections uint64) *Result {
 
 	if sections&(1<<bitPlatformRaw) != 0 {
 		result.RawManifest = map[string]any{
-			"package":     xm.PackageName,
-			"versionCode": fmt.Sprintf("%v", xm.VersionCode),
-			"versionName": xm.VersionName,
+			attrPackage:     xm.PackageName,
+			attrVersionCode: fmt.Sprintf("%v", xm.VersionCode),
+			attrVersionName: xm.VersionName,
 		}
 	}
 

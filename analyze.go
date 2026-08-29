@@ -42,14 +42,14 @@ func analyzeReport(rpt report, opts analyzeOptions) analysisResult {
 
 	// Scan for secrets in platform data.
 	if ar, ok := asAndroid(rpt); ok && ar.RawManifest != nil {
-		result.secretCandidates = append(result.secretCandidates, scanSecretsInMap(ar.RawManifest, "manifest")...)
+		result.secretCandidates = append(result.secretCandidates, scanSecretsInMap(ar.RawManifest, categoryManifest)...)
 	}
 	if ir, ok := asIOS(rpt); ok {
 		if ir.InfoPlist != nil {
 			result.secretCandidates = append(result.secretCandidates, scanSecretsInMap(ir.InfoPlist, "info_plist")...)
 		}
 		if ir.Entitlements != nil {
-			result.secretCandidates = append(result.secretCandidates, scanSecretsInMap(ir.Entitlements, "entitlement")...)
+			result.secretCandidates = append(result.secretCandidates, scanSecretsInMap(ir.Entitlements, categoryEntitlement)...)
 		}
 	}
 
@@ -84,75 +84,75 @@ func analyzeManifestSecurity(r report) []Finding {
 	if r.Debuggable {
 		findings = append(findings, Finding{
 			ID:         "manifest.debuggable",
-			Category:   "manifest",
+			Category:   categoryManifest,
 			Severity:   SeverityError,
 			Confidence: ConfidenceHigh,
 			Message:    "application is debuggable — allows arbitrary code execution via adb on any device",
 			Evidence: []Evidence{{
-				ArchivePath: "AndroidManifest.xml",
+				ArchivePath: pathAndroidManifest,
 				Field:       "application[@debuggable]",
 			}},
-			Fingerprint: fingerprint("manifest", "debuggable"),
+			Fingerprint: fingerprint(categoryManifest, "debuggable"),
 		})
 	}
 
 	if r.AllowBackup {
 		findings = append(findings, Finding{
 			ID:         "manifest.allow_backup",
-			Category:   "manifest",
+			Category:   categoryManifest,
 			Severity:   SeverityWarn,
 			Confidence: ConfidenceHigh,
 			Message:    "application allows backup — app data can be extracted via adb backup",
 			Evidence: []Evidence{{
-				ArchivePath: "AndroidManifest.xml",
+				ArchivePath: pathAndroidManifest,
 				Field:       "application[@allowBackup]",
 			}},
-			Fingerprint: fingerprint("manifest", "allowBackup"),
+			Fingerprint: fingerprint(categoryManifest, "allowBackup"),
 		})
 	}
 
 	if r.UsesCleartextTraffic {
 		findings = append(findings, Finding{
 			ID:         "manifest.cleartext_traffic",
-			Category:   "manifest",
+			Category:   categoryManifest,
 			Severity:   SeverityWarn,
 			Confidence: ConfidenceHigh,
 			Message:    "application permits cleartext (HTTP) traffic — network communication may be intercepted",
 			Evidence: []Evidence{{
-				ArchivePath: "AndroidManifest.xml",
+				ArchivePath: pathAndroidManifest,
 				Field:       "application[@usesCleartextTraffic]",
 			}},
-			Fingerprint: fingerprint("manifest", "usesCleartextTraffic"),
+			Fingerprint: fingerprint(categoryManifest, "usesCleartextTraffic"),
 		})
 	}
 
 	if r.TestOnly {
 		findings = append(findings, Finding{
 			ID:         "manifest.test_only",
-			Category:   "manifest",
+			Category:   categoryManifest,
 			Severity:   SeverityError,
 			Confidence: ConfidenceHigh,
 			Message:    "application is testOnly — can only be installed via adb, not suitable for production",
 			Evidence: []Evidence{{
-				ArchivePath: "AndroidManifest.xml",
+				ArchivePath: pathAndroidManifest,
 				Field:       "application[@testOnly]",
 			}},
-			Fingerprint: fingerprint("manifest", "testOnly"),
+			Fingerprint: fingerprint(categoryManifest, "testOnly"),
 		})
 	}
 
 	if r.ProfileableByShell {
 		findings = append(findings, Finding{
 			ID:         "manifest.profileable_by_shell",
-			Category:   "manifest",
+			Category:   categoryManifest,
 			Severity:   SeverityWarn,
 			Confidence: ConfidenceHigh,
 			Message:    "application is profileable from shell — may leak performance data in production",
 			Evidence: []Evidence{{
-				ArchivePath: "AndroidManifest.xml",
+				ArchivePath: pathAndroidManifest,
 				Field:       "application[@profileableByShell]",
 			}},
-			Fingerprint: fingerprint("manifest", "profileableByShell"),
+			Fingerprint: fingerprint(categoryManifest, "profileableByShell"),
 		})
 	}
 
@@ -223,7 +223,7 @@ func analyzeExportedComponents(components []ExportedComponent) []Finding {
 			Confidence: ConfidenceHigh,
 			Message:    msg,
 			Evidence: []Evidence{{
-				ArchivePath:       "AndroidManifest.xml",
+				ArchivePath:       pathAndroidManifest,
 				Field:             fmt.Sprintf("%s[@name]", ec.Kind),
 				MatchedTextMasked: ec.Name,
 			}},
@@ -433,7 +433,7 @@ func analyzeDangerousPermissions(r report) []Finding {
 			Confidence: ConfidenceHigh,
 			Message:    fmt.Sprintf("dangerous permission %s — %s", p.RawName, desc),
 			Evidence: []Evidence{{
-				ArchivePath:       "AndroidManifest.xml",
+				ArchivePath:       pathAndroidManifest,
 				Field:             "uses-permission",
 				MatchedTextMasked: p.RawName,
 			}},
@@ -457,19 +457,19 @@ func analyzeIOSEntitlements(r report) []Finding {
 	var findings []Finding
 
 	// get-task-allow = true means a debug/development build.
-	if v, ok := ir.Entitlements["get-task-allow"]; ok {
+	if v, ok := ir.Entitlements[entitlementGetTaskAllow]; ok {
 		if b, ok := v.(bool); ok && b {
 			findings = append(findings, Finding{
 				ID:         "ios.get_task_allow",
-				Category:   "entitlement",
+				Category:   categoryEntitlement,
 				Severity:   SeverityError,
 				Confidence: ConfidenceHigh,
 				Message:    "get-task-allow is true — this is a debug build, debugger can attach to the process",
 				Evidence: []Evidence{{
 					ArchivePath: "embedded.mobileprovision",
-					Field:       "get-task-allow",
+					Field:       entitlementGetTaskAllow,
 				}},
-				Fingerprint: fingerprint("ios", "get-task-allow"),
+				Fingerprint: fingerprint("ios", entitlementGetTaskAllow),
 			})
 		}
 	}
@@ -482,18 +482,18 @@ func analyzeIOSEntitlements(r report) []Finding {
 func analyzeIOSEntitlementsFromPermissions(r report) []Finding {
 	var findings []Finding
 	for _, p := range r.Permissions {
-		if p.Source == "entitlement" && p.RawName == "get-task-allow" {
+		if p.Source == categoryEntitlement && p.RawName == entitlementGetTaskAllow {
 			findings = append(findings, Finding{
 				ID:         "ios.get_task_allow",
-				Category:   "entitlement",
+				Category:   categoryEntitlement,
 				Severity:   SeverityError,
 				Confidence: ConfidenceHigh,
 				Message:    "get-task-allow entitlement present — likely a debug build",
 				Evidence: []Evidence{{
 					ArchivePath: "embedded.mobileprovision",
-					Field:       "get-task-allow",
+					Field:       entitlementGetTaskAllow,
 				}},
-				Fingerprint: fingerprint("ios", "get-task-allow"),
+				Fingerprint: fingerprint("ios", entitlementGetTaskAllow),
 			})
 		}
 	}
@@ -551,7 +551,7 @@ func extractEndpointsFromEntitlements(entitlements map[string]any) []NetworkEndp
 					endpoints = append(endpoints, NetworkEndpoint{
 						Scheme:     parts[0],
 						Host:       parts[1],
-						Source:     "entitlement",
+						Source:     categoryEntitlement,
 						Confidence: ConfidenceHigh,
 					})
 				}
@@ -704,12 +704,12 @@ func analyzeNSCPolicy(r report) []Finding {
 	if nsc.CleartextPermitted {
 		findings = append(findings, Finding{
 			ID:         "nsc.base_config_cleartext",
-			Category:   "cleartext",
+			Category:   categoryCleartext,
 			Severity:   SeverityWarn,
 			Confidence: ConfidenceHigh,
 			Message:    "network security config base-config permits cleartext traffic",
 			Evidence: []Evidence{{
-				ArchivePath: "network_security_config.xml",
+				ArchivePath: pathNetworkSecurityConfig,
 				Field:       "base-config[@cleartextTrafficPermitted]",
 			}},
 			Fingerprint: fingerprint("nsc", "base_config_cleartext"),
@@ -725,12 +725,12 @@ func analyzeNSCPolicy(r report) []Finding {
 	if nsc.HasDebugOverrides {
 		findings = append(findings, Finding{
 			ID:         "nsc.debug_overrides",
-			Category:   "cleartext",
+			Category:   categoryCleartext,
 			Severity:   SeverityWarn,
 			Confidence: ConfidenceHigh,
 			Message:    "network security config contains debug-overrides — may weaken TLS validation in debug builds",
 			Evidence: []Evidence{{
-				ArchivePath: "network_security_config.xml",
+				ArchivePath: pathNetworkSecurityConfig,
 				Field:       "debug-overrides",
 			}},
 			Fingerprint: fingerprint("nsc", "debug_overrides"),
@@ -747,12 +747,12 @@ func analyzeNSCDomainConfig(dc DomainConfig) []Finding {
 		domains := strings.Join(dc.Domains, ", ")
 		findings = append(findings, Finding{
 			ID:         fmt.Sprintf("nsc.domain_cleartext.%s", sanitizeFindingID(dc.Domains[0])),
-			Category:   "cleartext",
+			Category:   categoryCleartext,
 			Severity:   SeverityWarn,
 			Confidence: ConfidenceHigh,
 			Message:    fmt.Sprintf("network security config permits cleartext traffic for: %s", domains),
 			Evidence: []Evidence{{
-				ArchivePath:       "network_security_config.xml",
+				ArchivePath:       pathNetworkSecurityConfig,
 				Field:             "domain-config[@cleartextTrafficPermitted]",
 				MatchedTextMasked: domains,
 			}},
@@ -787,12 +787,12 @@ func analyzeIOSATS(r report) []Finding {
 		if b, ok := arbitrary.(bool); ok && b {
 			findings = append(findings, Finding{
 				ID:         "ios.ats_arbitrary_loads",
-				Category:   "cleartext",
+				Category:   categoryCleartext,
 				Severity:   SeverityWarn,
 				Confidence: ConfidenceHigh,
 				Message:    "NSAllowsArbitraryLoads is true — App Transport Security is disabled, cleartext HTTP allowed",
 				Evidence: []Evidence{{
-					ArchivePath: "Info.plist",
+					ArchivePath: pathInfoPlist,
 					Field:       "NSAppTransportSecurity.NSAllowsArbitraryLoads",
 				}},
 				Fingerprint: fingerprint("ios", "ats_arbitrary_loads"),
@@ -812,12 +812,12 @@ func analyzeIOSATS(r report) []Finding {
 				if b, ok := v.(bool); ok && b {
 					findings = append(findings, Finding{
 						ID:         fmt.Sprintf("ios.ats_insecure_domain.%s", sanitizeFindingID(domain)),
-						Category:   "cleartext",
+						Category:   categoryCleartext,
 						Severity:   SeverityWarn,
 						Confidence: ConfidenceHigh,
 						Message:    fmt.Sprintf("ATS exception allows insecure HTTP for domain: %s", domain),
 						Evidence: []Evidence{{
-							ArchivePath:       "Info.plist",
+							ArchivePath:       pathInfoPlist,
 							Field:             "NSExceptionDomains." + domain + ".NSExceptionAllowsInsecureHTTPLoads",
 							MatchedTextMasked: domain,
 						}},
@@ -830,12 +830,12 @@ func analyzeIOSATS(r report) []Finding {
 				if b, ok := v.(bool); ok && b {
 					findings = append(findings, Finding{
 						ID:         fmt.Sprintf("ios.ats_insecure_domain.%s", sanitizeFindingID(domain)),
-						Category:   "cleartext",
+						Category:   categoryCleartext,
 						Severity:   SeverityWarn,
 						Confidence: ConfidenceHigh,
 						Message:    fmt.Sprintf("ATS temporary exception allows insecure HTTP for domain: %s", domain),
 						Evidence: []Evidence{{
-							ArchivePath:       "Info.plist",
+							ArchivePath:       pathInfoPlist,
 							Field:             "NSExceptionDomains." + domain + ".NSTemporaryExceptionAllowsInsecureHTTPLoads",
 							MatchedTextMasked: domain,
 						}},

@@ -122,7 +122,7 @@ func OpenAllInnerAPKs(zr *zip.Reader, maxEntryBytes int64) ([]NamedZipReader, []
 			// no DEX — report at info to avoid noisy diagnostics.
 			// Other failures (corrupt zip, I/O errors) stay at warn
 			// because they may indicate a broken code-bearing split.
-			sev := "warn"
+			sev := sevWarn
 			if errors.Is(err, ErrEntryOversize) {
 				sev = "info"
 			}
@@ -142,7 +142,7 @@ func OpenAllInnerAPKs(zr *zip.Reader, maxEntryBytes int64) ([]NamedZipReader, []
 		if attempted >= maxInnerAPKs {
 			diags = append(diags, Diagnostic{
 				Code:     "dex.too_many_inner_apks",
-				Severity: "warn",
+				Severity: sevWarn,
 				Message:  fmt.Sprintf("inner APK count exceeds limit %d; skipping remaining entries", maxInnerAPKs),
 			})
 			break

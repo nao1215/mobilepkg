@@ -9,6 +9,10 @@ type dangerousAPIsRule struct{}
 
 func (r *dangerousAPIsRule) Name() string { return "DangerousAPIs" }
 
+// dexConstructor is the DEX/JVM name of an instance constructor, so a rule that
+// targets one matches on this rather than on the class's own name.
+const dexConstructor = "<init>"
+
 // dangerousTarget defines a dangerous API call to detect.
 type dangerousTarget struct {
 	class    string
@@ -21,25 +25,25 @@ var dangerousTargets = []dangerousTarget{
 	{
 		class:    "java/lang/Runtime",
 		method:   "exec",
-		severity: "error",
+		severity: sevError,
 		message:  "Runtime.exec() called — potential command injection risk",
 	},
 	{
 		class:    "java/lang/ProcessBuilder",
-		method:   "<init>",
-		severity: "warn",
+		method:   dexConstructor,
+		severity: sevWarn,
 		message:  "ProcessBuilder used — potential command execution",
 	},
 	{
 		class:    "dalvik/system/DexClassLoader",
-		method:   "<init>",
-		severity: "error",
+		method:   dexConstructor,
+		severity: sevError,
 		message:  "DexClassLoader used — dynamic code loading may execute untrusted code",
 	},
 	{
 		class:    "dalvik/system/PathClassLoader",
-		method:   "<init>",
-		severity: "warn",
+		method:   dexConstructor,
+		severity: sevWarn,
 		message:  "PathClassLoader used — dynamic code loading detected",
 	},
 	{
@@ -51,19 +55,19 @@ var dangerousTargets = []dangerousTarget{
 	{
 		class:    "android/telephony/SmsManager",
 		method:   "sendTextMessage",
-		severity: "warn",
+		severity: sevWarn,
 		message:  "SmsManager.sendTextMessage() called — app can send SMS programmatically",
 	},
 	{
 		class:    "android/telephony/SmsManager",
 		method:   "sendMultipartTextMessage",
-		severity: "warn",
+		severity: sevWarn,
 		message:  "SmsManager.sendMultipartTextMessage() called — app can send SMS programmatically",
 	},
 	{
 		class:    "android/app/admin/DevicePolicyManager",
 		method:   "resetPassword",
-		severity: "error",
+		severity: sevError,
 		message:  "DevicePolicyManager.resetPassword() called — app can change device password",
 	},
 	{
