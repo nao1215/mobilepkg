@@ -4,16 +4,22 @@ Thanks for your interest in mobilepkg. Bug reports, patches, tests, and reviews 
 
 ## Setting up
 
-Go 1.24 or later is required.
+Go 1.25 or later is required (see the `go` directive in `go.mod`).
 
 ```bash
 git clone https://github.com/nao1215/mobilepkg.git
 cd mobilepkg
-make tools   # install golangci-lint etc.
-make test    # run tests
-make lint    # run linter
-make build   # build CLI binary
+make tools    # install golangci-lint and atago
+make test     # run unit tests
+make e2e      # run the atago end-to-end suite against a freshly built binary
+make lint     # run linter
+make build    # build CLI binary
+make coverage # combined unit + E2E coverage
 ```
+
+The end-to-end tests live under `e2e/atago/` as plain-YAML [atago](https://github.com/nao1215/atago) specs and drive the real binary the way a user does (subcommand, flags, exit codes, JSON and Markdown output). `go run ./e2e/runner` builds mobilepkg from the checkout, puts it first on `PATH`, and hands the specs to atago, so the suite needs nothing installed system-wide.
+
+The bootstrap is Go rather than a shell script because the suite runs on Windows too, where a bash bootstrap would only prove that Git for Windows is installed. For the same reason no spec uses `shell: true` or reads a host environment variable: fixtures arrive through atago `fixture` steps and output redirection through `stdout_to`.
 
 ## Branch naming
 
@@ -69,12 +75,13 @@ Using Claude Code, Copilot, Cursor, etc. is fine. Just review the output, make s
 
 1. Check existing issues first. For larger changes, open an issue to discuss direction before writing code.
 2. Add tests for new features. For bug fixes, add a test that reproduces the bug.
-3. Run `make test`, `make lint`, and check coverage (`go test -cover ./...`).
+3. Run `make test`, `make lint`, and `make e2e` for changes visible from the command line, and check coverage (`make coverage`).
 4. PR title: brief summary. PR body: what changed, why, related issue number, and how to test.
 
 CI runs the following checks automatically — PRs cannot be merged until they all pass:
 
-- Cross-platform tests (Linux, macOS, Windows)
+- Cross-platform unit tests (Linux, macOS, Windows)
+- Cross-platform atago end-to-end tests (Linux, macOS, Windows)
 - golangci-lint via reviewdog
 - Coverage reporting via octocov (80 %+)
 - Build verification (`make build`)
