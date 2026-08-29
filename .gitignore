@@ -42,3 +42,6 @@ go.work.sum
 /spec.md
 testdata/no_commit/*
 CLAUDE.md
+
+# GoReleaser output directory
+/dist/
