@@ -40,19 +40,5 @@ nfpms:
       - rpm
       - apk
 
-# The bucket lives in this repository, so `scoop bucket add nao1215-mobilepkg
-# https://github.com/nao1215/mobilepkg` works without a separate bucket repo and
-# GoReleaser can push the manifest with the built-in GITHUB_TOKEN. A Homebrew
-# cask is deliberately absent: it would push to nao1215/homebrew-tap, which needs
-# a TAP_GITHUB_TOKEN secret this repository does not have.
-scoops:
-  - name: mobilepkg
-    repository:
-      owner: nao1215
-      name: mobilepkg
-      branch: main
-    directory: bucket
-    homepage: "https://github.com/nao1215/mobilepkg"
-    description: "Inspect and analyze Android and iOS application packages"
-    license: MIT
-    commit_msg_template: "chore(scoop): update the bucket manifest for {{ .Tag }}"
+# A Homebrew cask is deliberately absent: it would push to nao1215/homebrew-tap,
+# which needs a TAP_GITHUB_TOKEN secret this repository does not have.
