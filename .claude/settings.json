@@ -1,0 +1,34 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(go run:*)",
+      "Bash(make build:*)",
+      "Bash(./mobilepkg version:*)",
+      "Bash(1 done:*)",
+      "Bash(golangci-lint run:*)",
+      "Bash(wc -c /home/nao/ghq/github.com/nao1215/mobilepkg/testdata/example.apk)",
+      "Bash(/tmp/testexample.go:*)",
+      "Bash(grep -r \"no_commit\" /home/nao/ghq/github.com/nao1215/mobilepkg/*.go /home/nao/ghq/github.com/nao1215/mobilepkg/*_test.go)",
+      "Bash(grep -l \"stretchr/testify\" /home/nao/ghq/github.com/nao1215/mobilepkg/*_test.go)",
+      "Bash(grep \"requireRealAPK\\\\|readRealAPK\" /home/nao/ghq/github.com/nao1215/mobilepkg/*_test.go)",
+      "Bash(go fmt:*)",
+      "Bash(go vet:*)",
+      "Bash(echo \"exit: $?\")",
+      "Read(//home/nao/ghq/github.com/nao1215/mobilepkg/**)",
+      "Bash(/tmp/test_all.sh:*)",
+      "Bash(bash /tmp/test_all.sh)",
+      "Bash(git rm:*)",
+      "Bash(echo \"CLAUDE.md >> .gitignore\")",
+      "Bash(grep -n \"func Test\\\\|func Example\" /home/nao/ghq/github.com/nao1215/mobilepkg/*.go)",
+      "Bash(wc -l /home/nao/ghq/github.com/nao1215/mobilepkg/*.go)",
+      "Bash(grep -l \"func analyze\" /home/nao/ghq/github.com/nao1215/mobilepkg/*.go)",
+      "Bash(grep -l \"Analyze\\\\|Security\\\\|Scan\" /home/nao/ghq/github.com/nao1215/mobilepkg/*test.go)",
+      "Bash(goimports -w /home/nao/ghq/github.com/nao1215/mobilepkg/internal/dex/dex.go /home/nao/ghq/github.com/nao1215/mobilepkg/internal/dex/parse.go /home/nao/ghq/github.com/nao1215/mobilepkg/internal/scanner/rule_cleartext.go)",
+      "Bash(/tmp/mobilepkg inspect:*)"
+    ],
+    "additionalDirectories": [
+      "/home/nao/ghq/github.com/nao1215/mobilepkg/s/mobilepkg\\.AsAndroid(report)/report.PlatformData.(*mobilepkg.AndroidReport)",
+      "/home/nao/ghq/github.com/nao1215/mobilepkg/internal"
+    ]
+  }
+}

@@ -6,6 +6,10 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+### Removed
+
+- The Scoop bucket. `scoop bucket add nao1215-mobilepkg https://github.com/nao1215/mobilepkg` no longer has anything to install. A bucket hosted in its own repository is not in Scoop's known-bucket list, so `scoop search mobilepkg` never found it — reaching it meant reading this README, already using Scoop, and typing the repository URL. It also published by committing into `main`, which fails the day this repository gets branch protection, and fails after the GitHub Release exists but before build provenance is attested, which cannot be added to a tag afterwards. Windows users install with `go install` or the `zip` archive on the release page. Anyone who added the bucket can drop it with `scoop bucket rm nao1215-mobilepkg`.
+
 ## [0.5.1] - 2026-08-30
 
 ### Fixed

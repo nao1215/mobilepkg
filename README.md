@@ -39,7 +39,7 @@ It reads the package as a zip archive, parses the manifest and DEX bytecode in-p
 
 ## Install
 
-mobilepkg is distributed as a Go package, as prebuilt archives and Linux packages on the [release page](https://github.com/nao1215/mobilepkg/releases), and through a Scoop bucket for Windows.
+mobilepkg is distributed as a Go package, and as prebuilt archives and Linux packages on the [release page](https://github.com/nao1215/mobilepkg/releases).
 
 ### Use "go install"
 
@@ -58,13 +58,6 @@ Every release ships `tar.gz` archives for Linux and macOS, `zip` archives for Wi
 sudo dpkg -i mobilepkg_0.5.1_linux_amd64.deb   # Debian, Ubuntu
 sudo rpm -i mobilepkg_0.5.1_linux_amd64.rpm    # Fedora, RHEL
 sudo apk add --allow-untrusted mobilepkg_0.5.1_linux_amd64.apk  # Alpine
-```
-
-### Use Scoop (Windows)
-
-```powershell
-scoop bucket add nao1215-mobilepkg https://github.com/nao1215/mobilepkg
-scoop install nao1215-mobilepkg/mobilepkg
 ```
 
 ## CLI
