@@ -6,6 +6,15 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+### Added
+
+- A downloads badge in the README. The release page carries eighteen assets and nothing said so.
+
+### Changed
+
+- The E2E suite runs with atago v0.22.0, and `golangci/golangci-lint-action` is pinned to the commit its v9.3.0 tag points at. The 35 scenarios were run locally against the new atago before the pin moved.
+- `github.com/mattn/go-runewidth` 0.0.30 and `github.com/yuin/goldmark` 1.8.6. The `go` directive stays at 1.25.0: the golang.org/x updates now declare `go 1.26.0` and are held back for that reason.
+
 ### Removed
 
 - The Scoop bucket. `scoop bucket add nao1215-mobilepkg https://github.com/nao1215/mobilepkg` no longer has anything to install. A bucket hosted in its own repository is not in Scoop's known-bucket list, so `scoop search mobilepkg` never found it — reaching it meant reading this README, already using Scoop, and typing the repository URL. It also published by committing into `main`, which fails the day this repository gets branch protection, and fails after the GitHub Release exists but before build provenance is attested, which cannot be added to a tag afterwards. Windows users install with `go install` or the `zip` archive on the release page. Anyone who added the bucket can drop it with `scoop bucket rm nao1215-mobilepkg`.
