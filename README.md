@@ -6,6 +6,7 @@
 [![Build](https://github.com/nao1215/mobilepkg/actions/workflows/build.yml/badge.svg)](https://github.com/nao1215/mobilepkg/actions/workflows/build.yml)
 [![reviewdog](https://github.com/nao1215/mobilepkg/actions/workflows/reviewdog.yml/badge.svg)](https://github.com/nao1215/mobilepkg/actions/workflows/reviewdog.yml)
 [![Go Reference](https://pkg.go.dev/badge/github.com/nao1215/mobilepkg.svg)](https://pkg.go.dev/github.com/nao1215/mobilepkg)
+[![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/nao1215/mobilepkg/total)](https://github.com/nao1215/mobilepkg/releases)
 
 ![logo](./doc/image/mobilepkg_small_logo.png)
 
