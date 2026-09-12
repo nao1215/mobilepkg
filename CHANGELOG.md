@@ -6,6 +6,8 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-09-12
+
 ### Added
 
 - A downloads badge in the README. The release page carries eighteen assets and nothing said so.
