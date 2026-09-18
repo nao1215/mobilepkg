@@ -1,4 +1,4 @@
-.PHONY: build test e2e coverage lint clean tools install
+.PHONY: build test e2e coverage lint clean tools install bench bench-compare
 
 APP      = mobilepkg
 VERSION  = $(shell git describe --tags --abbrev=0 2>/dev/null || echo dev)
@@ -23,6 +23,12 @@ coverage:
 lint:
 	golangci-lint run ./...
 
+bench: ## Measure mobilepkg with the himorime suite in bench/ (requires himorime on PATH)
+	himorime run bench
+
+bench-compare: ## Compare main with the working tree on the himorime suite (BASE=main)
+	himorime compare --against $${BASE:-main} bench
+
 clean:
 	rm -f $(APP) cover.out cover.html coverage.out
 	rm -rf .coverage
@@ -33,3 +39,4 @@ tools:
 	# atago breaks a spec. CI pins an exact version (see the "Install atago"
 	# step in .github/workflows/) so a build stays reproducible.
 	go install github.com/nao1215/atago@latest
+	go install github.com/nao1215/himorime@latest
