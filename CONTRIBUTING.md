@@ -4,7 +4,7 @@ Thanks for your interest in mobilepkg. Bug reports, patches, tests, and reviews 
 
 ## Setting up
 
-Go 1.25 or later is required (see the `go` directive in `go.mod`).
+Go 1.26 or later is required (see the `go` directive in `go.mod`).
 
 ```bash
 git clone https://github.com/nao1215/mobilepkg.git

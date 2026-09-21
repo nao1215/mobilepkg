@@ -8,10 +8,12 @@ on:
     branches: [main]
 
 jobs:
-  # This is the only workflow that pins Go versions. "1.25" is the floor go.mod
+  # This is the only workflow that pins Go versions. "1.26" is the floor go.mod
   # declares -- running it here is the only place that claim is checked -- and
-  # "1" tracks the newest release, which is what catches new vet checks and
-  # runtime behavior changes. Every other workflow uses "stable" on purpose:
+  # "stable" tracks the newest release, which is what catches new vet checks and
+  # runtime behavior changes. It is "stable" and not "1": setup-go resolves "1"
+  # from its own manifest, which lagged Go 1.27 and kept this leg on 1.26.8, so
+  # the newest Go was never tested here. Every other workflow uses "stable" on purpose:
   # go.mod says which Go a user may build mobilepkg from, not which toolchain
   # this repository's artifacts, E2E and coverage should be produced with.
   unit_test:
@@ -24,9 +26,8 @@ jobs:
           - "windows-latest"
           - "macos-latest"
         go:
-          - "1"
-          - "1.25"
           - "1.26"
+          - "stable"
       fail-fast: false
     runs-on: ${{ matrix.os }}
     timeout-minutes: 10

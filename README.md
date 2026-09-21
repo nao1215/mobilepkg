@@ -13,7 +13,7 @@
 
 mobilepkg inspects APK, AAB, APKS, XAPK, and IPA files and emits package metadata plus security findings as JSON, Markdown, or RDJSONL. It is intended for release triage and CI checks.
 
-It reads the package as a zip archive, parses the manifest and DEX bytecode in-process, and finishes in seconds. No Android SDK, Xcode, or device required. Runs on Linux, Windows, and macOS (Go 1.25+).
+It reads the package as a zip archive, parses the manifest and DEX bytecode in-process, and finishes in seconds. No Android SDK, Xcode, or device required. Runs on Linux, Windows, and macOS (Go 1.26+).
 
 ## Scope
 
@@ -45,7 +45,7 @@ mobilepkg is distributed as a Go package, and as prebuilt archives and Linux pac
 
 ### Use "go install"
 
-Requires Go 1.25 or later.
+Requires Go 1.26 or later.
 
 ```bash
 go install github.com/nao1215/mobilepkg/cmd/mobilepkg@latest  # CLI
