@@ -6,6 +6,10 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+### Changed
+
+- Building from source now needs Go 1.26 or later (was 1.25). golang.org/x/image v0.46.0 and x/sys v0.48.0, which this update takes, declare `go 1.26.0`, and Go 1.26 and 1.27 are the two releases the Go team still supports. The unit-test matrix now runs the newest Go through `stable`; its `"1"` leg had been resolving to 1.26.8, so Go 1.27 was never tested. Prebuilt binaries are unaffected.
+
 ## [0.5.2] - 2026-09-12
 
 ### Added
