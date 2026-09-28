@@ -6,6 +6,11 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+### Fixed
+
+- A crafted `AndroidManifest.xml`, `network_security_config.xml` or `resources.arsc` no longer hangs `inspect`: a chunk declaring size 0 made the binary XML and resource table readers loop on the same offset forever. Such a chunk is now reported as a parse error.
+- A small crafted APK can no longer make `inspect` allocate gigabytes. Overlapping string pool entries in binary XML and `resources.arsc`, overlapping `string_ids` in a DEX file, attribute records laid out at a stride smaller than one record, and many classes or methods pointing at the same DEX bytecode each let a file of a few kilobytes expand into memory quadratically. Overlapping strings and attributes are now rejected, the decoded manifest is capped at 32 MiB, and shared DEX bytecode is indexed once. Files produced by aapt2 and d8 are unaffected.
+
 ## [0.5.3] - 2026-09-21
 
 ### Changed

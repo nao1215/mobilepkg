@@ -31,14 +31,29 @@ func (f *File) ensureCallIndex() {
 
 // buildCallIndex scans all class_defs → class_data → code_items for
 // invoke-* instructions and populates the call index.
+//
+// In a well-formed DEX every class_data_item and every code_item is used
+// once and code_items never overlap. A crafted file can point many classes
+// at one class_data_item, or many methods at one code_item, so the same
+// invoke instructions would be recorded over and over and the index would
+// grow quadratically with the file size. Each class_data_item is therefore
+// scanned once, and a code_item whose instructions overlap bytes that were
+// already scanned is skipped.
 func (f *File) buildCallIndex() {
+	f.scannedInsns = make([]bool, len(f.data))
+	visitedClassData := make(map[uint32]struct{})
 	for _, cd := range f.classes {
 		if cd.ClassDataOff == 0 {
 			continue
 		}
+		if _, ok := visitedClassData[cd.ClassDataOff]; ok {
+			continue
+		}
+		visitedClassData[cd.ClassDataOff] = struct{}{}
 		callerClass := f.resolveType(cd.ClassIdx)
 		f.scanClassData(int(cd.ClassDataOff), callerClass)
 	}
+	f.scannedInsns = nil
 }
 
 // scanClassData parses a class_data_item and scans each method's code
@@ -191,6 +206,16 @@ func (f *File) scanCodeItem(off int, callerClass, callerMethod string) {
 
 	if insnsEnd > len(data) {
 		return
+	}
+	if f.scannedInsns != nil {
+		for _, done := range f.scannedInsns[insnsOff:insnsEnd] {
+			if done {
+				return
+			}
+		}
+		for i := insnsOff; i < insnsEnd; i++ {
+			f.scannedInsns[i] = true
+		}
 	}
 
 	f.scanInsns(data[insnsOff:insnsEnd], uint32(insnsOff), callerClass, callerMethod)

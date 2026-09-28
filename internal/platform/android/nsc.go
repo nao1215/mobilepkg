@@ -231,7 +231,7 @@ func tryDecodeBinaryXML(data []byte) []byte {
 	if len(data) < 4 || data[0] != 0x03 || data[1] != 0x00 {
 		return data // Not binary XML, return as-is (may be plain text XML).
 	}
-	xf, err := newXMLFile(bytes.NewReader(data))
+	xf, err := newXMLFile(data)
 	if err != nil {
 		return data
 	}

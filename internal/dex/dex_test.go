@@ -10,8 +10,8 @@ import (
 
 // buildTestDEX builds a minimal valid DEX file with the given strings and
 // method definitions. It returns raw bytes suitable for Parse().
-func buildTestDEX(t *testing.T, strings []string, methods []testMethodDef) []byte {
-	t.Helper()
+func buildTestDEX(tb testing.TB, strings []string, methods []testMethodDef) []byte {
+	tb.Helper()
 	b := &dexBuilder{}
 	b.addStrings(strings)
 	for _, m := range methods {
@@ -340,4 +340,101 @@ func TestParse_StringIDsExceedsFileSize(t *testing.T) {
 	_, err := Parse(data)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "exceeds file size")
+}
+
+// maxFuzzDEXBytes bounds fuzz inputs. Linear-size invariants are what the
+// fuzz target checks, so small inputs are enough to expose amplification.
+const maxFuzzDEXBytes = 64 << 10
+
+// FuzzParse feeds arbitrary bytes to Parse and the call-index scanner.
+// Properties: no panic, and decoded strings and call sites stay linear in
+// the input size, so a crafted DEX cannot make the analyzer allocate far
+// more memory than the file it was given.
+func FuzzParse(f *testing.F) {
+	f.Add(buildTestDEX(f, []string{"hello", "world", "Ljava/lang/Object;"}, nil))
+	f.Add(buildTestDEX(f, nil, []testMethodDef{{className: "Lcom/example/A;", methodName: "run", protoDesc: "V"}}))
+	f.Add(buildDEXWithCode(f, "Lcom/example/Caller;", "onCreate", []testMethodDef{
+		{className: "Landroid/webkit/WebSettings;", methodName: "setJavaScriptEnabled", protoDesc: "VZ"},
+		{className: "Landroid/util/Log;", methodName: "d", protoDesc: "I"},
+	}))
+	f.Add(make([]byte, headerSize))
+
+	f.Fuzz(func(t *testing.T, data []byte) {
+		if len(data) > maxFuzzDEXBytes {
+			t.Skip()
+		}
+		df, err := Parse(data)
+		if err != nil {
+			return
+		}
+
+		// Entries that repeat an offset share one string, so count each
+		// distinct string once.
+		total := 0
+		distinct := make(map[string]struct{})
+		for _, s := range df.Strings() {
+			if _, ok := distinct[s]; !ok {
+				distinct[s] = struct{}{}
+				total += len(s)
+			}
+		}
+		// Each raw MUTF-8 byte decodes to at most 2 UTF-8 bytes, and string
+		// data items do not overlap in a well-formed file.
+		if limit := 2 * len(data); total > limit {
+			t.Fatalf("decoded strings total %d bytes from a %d-byte input (limit %d)", total, len(data), limit)
+		}
+
+		if got, want := len(df.Methods()), int(df.header.MethodIDsSize); got != want {
+			t.Fatalf("Methods() returned %d entries, header declares %d", got, want)
+		}
+
+		df.FindMethodCalls("", "")
+		sites := 0
+		for _, cs := range df.callIndex {
+			sites += len(cs)
+		}
+		// Every invoke instruction occupies at least 4 bytes of its own.
+		if limit := len(data) / 4; sites > limit {
+			t.Fatalf("call index holds %d call sites from a %d-byte input (limit %d)", sites, len(data), limit)
+		}
+	})
+}
+
+func TestParse_RejectsOverlappingStringData(t *testing.T) {
+	t.Parallel()
+
+	// string_ids entries at offsets run, run+1, run+2, ... each decode the
+	// rest of one long run of bytes, which would materialise a quadratic
+	// amount of string data. Found by FuzzParse.
+	const count = 1000
+	le := binary.LittleEndian
+	stringIDsOff := headerSize
+	run := stringIDsOff + count*4
+	data := make([]byte, run+count+1)
+	copy(data[0:8], "dex\n035\x00")
+	le.PutUint32(data[40:44], endianConstant)
+	le.PutUint32(data[56:60], count)
+	le.PutUint32(data[60:64], uint32(stringIDsOff))
+	for i := range count {
+		le.PutUint32(data[stringIDsOff+i*4:], uint32(run+i))
+		data[run+i] = 'A'
+	}
+
+	_, err := Parse(data)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "overlap")
+}
+
+func TestParse_SharedStringOffsetIsAccepted(t *testing.T) {
+	t.Parallel()
+
+	// Several string_ids pointing at the same string_data_item share it.
+	data := buildTestDEX(t, []string{"hello", "world"}, nil)
+	le := binary.LittleEndian
+	stringIDsOff := le.Uint32(data[60:64])
+	copy(data[stringIDsOff+4:stringIDsOff+8], data[stringIDsOff:stringIDsOff+4])
+
+	f, err := Parse(data)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"hello", "hello"}, f.Strings())
 }
