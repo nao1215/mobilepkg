@@ -6,6 +6,10 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+### Changed
+
+- Release artifacts are now signed and ship with SLSA build provenance: `checksums.txt` gets a keyless cosign bundle (`checksums.txt.sigstore.json`), and every release carries `multiple.intoto.jsonl`, which `slsa-verifier verify-artifact` checks against the downloaded archive.
+
 ### Fixed
 
 - A crafted `AndroidManifest.xml`, `network_security_config.xml` or `resources.arsc` no longer hangs `inspect`: a chunk declaring size 0 made the binary XML and resource table readers loop on the same offset forever. Such a chunk is now reported as a parse error.
