@@ -7,6 +7,9 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
   # This is the only workflow that pins Go versions. "1.26" is the floor go.mod
   # declares -- running it here is the only place that claim is checked -- and

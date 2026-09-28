@@ -7,17 +7,19 @@ on:
   pull_request:
     branches: [main]
 
-# octocov reads/writes the Actions-artifact datastore (diff/report in
-# .octocov.yml) and comments coverage on pull requests; contents:write lets the
-# push-to-main run commit the regenerated coverage badge back.
 permissions:
-  contents: write
-  actions: write
-  pull-requests: write
+  contents: read
 
 jobs:
   coverage:
     name: Coverage (unit + e2e)
+    # octocov reads/writes the Actions-artifact datastore (diff/report in
+    # .octocov.yml) and comments coverage on pull requests; contents:write lets
+    # the push-to-main run commit the regenerated coverage badge back.
+    permissions:
+      contents: write
+      actions: write
+      pull-requests: write
 
     strategy:
       matrix:

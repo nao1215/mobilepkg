@@ -29,16 +29,21 @@ jobs:
         run: make build
 
       - name: Inspect mobile package
+        # The inputs reach the script through env rather than being expanded
+        # into it, so a path cannot inject shell syntax.
+        env:
+          ARTIFACT_PATH: ${{ inputs.artifact_path }}
+          BASELINE_PATH: ${{ inputs.baseline_path }}
         run: |
-          ARGS=""
-          if [ -n "${{ inputs.baseline_path }}" ]; then
-            ARGS="--baseline ${{ inputs.baseline_path }}"
+          args=()
+          if [ -n "$BASELINE_PATH" ]; then
+            args=(--baseline "$BASELINE_PATH")
           fi
-          ./mobilepkg inspect $ARGS "${{ inputs.artifact_path }}" > report.json
-          ./mobilepkg inspect $ARGS --format markdown "${{ inputs.artifact_path }}" >> "$GITHUB_STEP_SUMMARY"
+          ./mobilepkg inspect "${args[@]}" "$ARTIFACT_PATH" > report.json
+          ./mobilepkg inspect "${args[@]}" --format markdown "$ARTIFACT_PATH" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: mobilepkg-report
           path: report.json
