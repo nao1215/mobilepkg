@@ -9,6 +9,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ### Changed
 
 - Release artifacts are now signed and ship with SLSA build provenance: `checksums.txt` gets a keyless cosign bundle (`checksums.txt.sigstore.json`), and every release carries `multiple.intoto.jsonl`, which `slsa-verifier verify-artifact` checks against the downloaded archive.
+- Building from source now needs Go 1.26.6 or later (was 1.26.0). Earlier 1.26 patch releases have standard library advisories that this program reaches, in `encoding/xml` and `encoding/asn1` among others; the new govulncheck workflow scans the floor and the newest Go every day. Prebuilt binaries are unaffected.
 
 ### Fixed
 
