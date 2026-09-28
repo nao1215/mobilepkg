@@ -58,14 +58,14 @@ go get github.com/nao1215/mobilepkg                           # library
 Every release ships `tar.gz` archives for Linux and macOS, `zip` archives for Windows, and `.deb`, `.rpm` and `.apk` packages for Linux, all for `amd64`, `arm64` and `386`. Extract the archive and put the `mobilepkg` binary somewhere on your `PATH`, or install the package for your distribution:
 
 ```bash
-sudo dpkg -i mobilepkg_0.5.3_linux_amd64.deb   # Debian, Ubuntu
-sudo rpm -i mobilepkg_0.5.3_linux_amd64.rpm    # Fedora, RHEL
-sudo apk add --allow-untrusted mobilepkg_0.5.3_linux_amd64.apk  # Alpine
+sudo dpkg -i mobilepkg_0.5.4_linux_amd64.deb   # Debian, Ubuntu
+sudo rpm -i mobilepkg_0.5.4_linux_amd64.rpm    # Fedora, RHEL
+sudo apk add --allow-untrusted mobilepkg_0.5.4_linux_amd64.apk  # Alpine
 ```
 
 ## Verifying release integrity
 
-Releases after v0.5.3 ship supply-chain metadata so you can verify what you download:
+Releases from v0.5.4 on ship supply-chain metadata so you can verify what you download:
 
 - Signed checksums: `checksums.txt` is signed with [cosign](https://github.com/sigstore/cosign) (keyless), producing `checksums.txt.sigstore.json`.
 - SBOM: an SPDX Software Bill of Materials is attached to each release archive as `<archive>.sbom.json`.
