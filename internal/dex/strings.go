@@ -27,12 +27,28 @@ func (f *File) parseStringIDs(data []byte) error {
 
 	le := binary.LittleEndian
 	f.strings = make([]string, count)
+	// string_data_items never overlap in a well-formed DEX, so the bytes they
+	// occupy add up to at most the file size. Enforcing that keeps a crafted
+	// string_ids table (many entries pointing into one long run of bytes)
+	// from decoding the same data over and over into gigabytes of strings.
+	// Entries that repeat an offset share the already decoded string.
+	seen := make(map[int]string)
+	consumed := 0
 	for i := range count {
 		strDataOff := int(le.Uint32(data[off+i*4 : off+i*4+4]))
-		s, err := readMUTF8(data, strDataOff)
+		if s, ok := seen[strDataOff]; ok {
+			f.strings[i] = s
+			continue
+		}
+		s, n, err := readMUTF8(data, strDataOff)
 		if err != nil {
 			return fmt.Errorf("string %d at offset %d: %w", i, strDataOff, err)
 		}
+		consumed += n
+		if consumed > len(data) {
+			return fmt.Errorf("string data items overlap: %d bytes decoded from a %d-byte file", consumed, len(data))
+		}
+		seen[strDataOff] = s
 		f.strings[i] = s
 	}
 	return nil
@@ -40,30 +56,30 @@ func (f *File) parseStringIDs(data []byte) error {
 
 // readMUTF8 reads a MUTF-8 encoded string from data at the given offset.
 // The format is: ULEB128 character count, followed by MUTF-8 bytes, followed
-// by a zero byte terminator.
-func readMUTF8(data []byte, off int) (string, error) {
+// by a zero byte terminator. It also returns the number of bytes the item
+// occupies, terminator included.
+func readMUTF8(data []byte, off int) (string, int, error) {
 	if off < 0 || off >= len(data) {
-		return "", fmt.Errorf("offset %d out of bounds (size %d)", off, len(data))
+		return "", 0, fmt.Errorf("offset %d out of bounds (size %d)", off, len(data))
 	}
 
 	// Read ULEB128 character count (we skip it; read until null terminator).
 	_, n, err := readULEB128(data, off)
 	if err != nil {
-		return "", err
+		return "", 0, err
 	}
-	pos := off + n
+	start := off + n
 
 	// Read MUTF-8 bytes until null terminator.
-	var buf []byte
-	for pos < len(data) {
-		b := data[pos]
-		if b == 0 {
-			break
-		}
-		buf = append(buf, b)
-		pos++
+	end := start
+	for end < len(data) && data[end] != 0 {
+		end++
 	}
-	return decodeMUTF8(buf), nil
+	size := end - off
+	if end < len(data) {
+		size++ // terminator
+	}
+	return decodeMUTF8(data[start:end]), size, nil
 }
 
 // decodeMUTF8 decodes MUTF-8 encoded bytes to a Go string.

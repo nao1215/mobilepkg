@@ -31,6 +31,10 @@ type File struct {
 
 	// callIndex is a lazily built inverted index of method calls.
 	callIndex map[methodKey][]CallSite
+
+	// scannedInsns marks the bytes of code_item instruction arrays already
+	// scanned while the call index is being built; nil otherwise.
+	scannedInsns []bool
 }
 
 type header struct {

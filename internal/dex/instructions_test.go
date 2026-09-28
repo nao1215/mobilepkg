@@ -12,8 +12,8 @@ import (
 //   - A class "LTestClass;" with a method "testMethod" whose code contains
 //     invoke-virtual instructions calling each of the target methods.
 //   - Target methods in the method table.
-func buildDEXWithCode(t *testing.T, callerClass string, callerMethod string, targets []testMethodDef) []byte {
-	t.Helper()
+func buildDEXWithCode(tb testing.TB, callerClass string, callerMethod string, targets []testMethodDef) []byte {
+	tb.Helper()
 	le := binary.LittleEndian
 
 	// Collect all strings.
@@ -401,4 +401,57 @@ func TestResolveType(t *testing.T) {
 
 	assert.Equal(t, "Ljava/lang/Object;", f.resolveType(0))
 	assert.Equal(t, "", f.resolveType(999)) // out of bounds
+}
+
+// sharedCodeDEX returns a DEX whose invoke of WebSettings.setJavaScriptEnabled
+// is reachable from many places: classes class_defs all point at one
+// class_data_item, and that item lists methods encoded methods that all point
+// at the same code_item. Found by FuzzParse.
+func sharedCodeDEX(t *testing.T, classes, methods int) []byte {
+	t.Helper()
+	le := binary.LittleEndian
+	data := buildDEXWithCode(t, "Lcom/test/Caller;", "doStuff", []testMethodDef{
+		{className: "Landroid/webkit/WebSettings;", methodName: "setJavaScriptEnabled"},
+	})
+
+	classDefsOff := le.Uint32(data[100:104])
+	classDef := append([]byte(nil), data[classDefsOff:classDefsOff+32]...)
+
+	// The builder's class_data_item is four one-byte sizes followed by one
+	// encoded_method: method_idx_diff, access_flags, code_off.
+	classDataOff := int(le.Uint32(classDef[24:28]))
+	codeOff, _, err := readULEB128(data, classDataOff+6)
+	require.NoError(t, err)
+
+	newClassDataOff := len(data)
+	data = appendULEB128(data, 0)
+	data = appendULEB128(data, 0)
+	data = appendULEB128(data, uint32(methods))
+	data = appendULEB128(data, 0)
+	for range methods {
+		data = appendULEB128(data, 0) // method_idx_diff: every entry is the caller
+		data = appendULEB128(data, 0x0001)
+		data = appendULEB128(data, codeOff)
+	}
+	le.PutUint32(classDef[24:28], uint32(newClassDataOff))
+
+	newClassDefsOff := len(data)
+	for range classes {
+		data = append(data, classDef...)
+	}
+	le.PutUint32(data[96:100], uint32(classes))
+	le.PutUint32(data[100:104], uint32(newClassDefsOff))
+	return data
+}
+
+func TestFindMethodCalls_SharedCodeItemIsIndexedOnce(t *testing.T) {
+	t.Parallel()
+
+	f, err := Parse(sharedCodeDEX(t, 50, 50))
+	require.NoError(t, err)
+
+	calls := f.FindMethodCalls("android/webkit/WebSettings", "setJavaScriptEnabled")
+	require.Len(t, calls, 1, "one invoke instruction must yield one call site, not one per class and method that references it")
+	assert.Equal(t, "Lcom/test/Caller;", calls[0].CallerClass)
+	assert.Equal(t, "doStuff", calls[0].CallerMethod)
 }

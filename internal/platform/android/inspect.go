@@ -97,10 +97,10 @@ func Inspect(zr *zip.Reader, sections uint64, r io.ReaderAt, size int64, maxEntr
 	var resourceTable *tableFile
 	resData, resErr := readZipFile(zr, "resources.arsc", maxEntryBytes)
 	if resErr == nil {
-		resourceTable, _ = newTableFile(bytes.NewReader(resData))
+		resourceTable, _ = newTableFile(resData)
 	}
 
-	xmlFile, err := newXMLFile(bytes.NewReader(manifestData))
+	xmlFile, err := newXMLFile(manifestData)
 	if err != nil {
 		return nil, nil, fmt.Errorf("%w: %w", ErrManifestParseFailed, err)
 	}
@@ -565,6 +565,15 @@ const maxTableEntryCount = 1 << 20
 // triggering a multi-gigabyte allocation.
 const maxStringBytes = 1 << 20 // 1 MiB
 
+// maxDecodedXMLBytes is the upper bound for the text XML that a binary XML
+// document is decoded into. Element and attribute records refer to the
+// string pool by index, so a small crafted document can repeat one long
+// string millions of times; this cap stops that from growing the output
+// without limit. Real manifests decode to well under a megabyte.
+const maxDecodedXMLBytes = 32 << 20 // 32 MiB
+
+var errDecodedXMLTooLarge = fmt.Errorf("binary XML: decoded document exceeds %d bytes", maxDecodedXMLBytes)
+
 type resChunkHeader struct {
 	Type       uint16
 	HeaderSize uint16
@@ -608,11 +617,11 @@ type xmlFile struct {
 	buf        bytes.Buffer
 }
 
-func newXMLFile(r io.ReaderAt) (*xmlFile, error) {
+func newXMLFile(data []byte) (*xmlFile, error) {
 	f := &xmlFile{
 		namespaces: make(map[uint32]uint32),
 	}
-	sr := io.NewSectionReader(r, 0, 1<<63-1)
+	sr := io.NewSectionReader(bytes.NewReader(data), 0, int64(len(data)))
 
 	f.buf.WriteString(xml.Header)
 
@@ -623,7 +632,7 @@ func newXMLFile(r io.ReaderAt) (*xmlFile, error) {
 
 	offset := int64(header.HeaderSize)
 	for offset < int64(header.Size) {
-		ch, err := f.readChunk(r, offset)
+		ch, err := f.readChunk(sr, offset)
 		if err != nil {
 			return nil, err
 		}
@@ -636,14 +645,9 @@ func (f *xmlFile) reader() *bytes.Reader {
 	return bytes.NewReader(f.buf.Bytes())
 }
 
-func (f *xmlFile) readChunk(r io.ReaderAt, offset int64) (*resChunkHeader, error) {
-	sr := io.NewSectionReader(r, offset, 1<<63-1-offset)
-	var ch resChunkHeader
-	if err := binary.Read(sr, binary.LittleEndian, &ch); err != nil {
-		return nil, err
-	}
-
-	if _, err := sr.Seek(0, io.SeekStart); err != nil {
+func (f *xmlFile) readChunk(file *io.SectionReader, offset int64) (*resChunkHeader, error) {
+	ch, sr, err := openChunk(file, offset)
+	if err != nil {
 		return nil, err
 	}
 	switch ch.Type {
@@ -670,8 +674,54 @@ func (f *xmlFile) readChunk(r io.ReaderAt, offset int64) (*resChunkHeader, error
 			return nil, err
 		}
 	}
+	if f.buf.Len() > maxDecodedXMLBytes {
+		return nil, errDecodedXMLTooLarge
+	}
 
 	return &ch, nil
+}
+
+// resChunkHeaderSize is the encoded size of resChunkHeader.
+const resChunkHeaderSize = 8
+
+// openChunk reads the chunk header at offset in parent and returns it with
+// a reader positioned at the start of the chunk and limited to it.
+//
+// A chunk whose declared size cannot hold its own header is rejected: the
+// chunk walkers advance by the declared size, so a size of zero would make
+// them read the same chunk forever. A chunk's records live inside the
+// chunk, so the returned view stops a record from reaching into the rest
+// of the file.
+func openChunk(parent *io.SectionReader, offset int64) (resChunkHeader, *io.SectionReader, error) {
+	var ch resChunkHeader
+	if err := binary.Read(subSection(parent, offset, resChunkHeaderSize), binary.LittleEndian, &ch); err != nil {
+		return ch, nil, err
+	}
+	if err := validateChunkSize(ch, offset); err != nil {
+		return ch, nil, err
+	}
+	return ch, subSection(parent, offset, int64(ch.Size)), nil
+}
+
+func validateChunkSize(ch resChunkHeader, offset int64) error {
+	if ch.Size < resChunkHeaderSize {
+		return fmt.Errorf("resource chunk at offset %d: size %d is smaller than its %d-byte header", offset, ch.Size, resChunkHeaderSize)
+	}
+	return nil
+}
+
+// subSection returns the n bytes of parent starting at off, clamped to the
+// bytes parent actually has. Size() of the result is therefore never more
+// than the data behind it, which lets callers use it as a budget.
+func subSection(parent *io.SectionReader, off, n int64) *io.SectionReader {
+	size := parent.Size()
+	if off < 0 || off > size {
+		off, n = size, 0
+	}
+	if n < 0 || n > size-off {
+		n = size - off
+	}
+	return io.NewSectionReader(parent, off, n)
 }
 
 func readStringPool(sr *io.SectionReader) (*resStringPool, error) {
@@ -685,6 +735,15 @@ func readStringPool(sr *io.SectionReader) (*resStringPool, error) {
 	}
 	if hdr.StyleCount > maxStringPoolCount {
 		return nil, fmt.Errorf("string pool: style count %d exceeds limit %d", hdr.StyleCount, maxStringPoolCount)
+	}
+
+	// Everything the pool refers to lives inside its own chunk. Reading
+	// through a view limited to the chunk keeps offsets from reaching into
+	// the rest of the file.
+	sr = subSection(sr, 0, int64(hdr.Header.Size))
+	poolSize := sr.Size()
+	if _, err := sr.Seek(int64(binary.Size(hdr)), io.SeekStart); err != nil {
+		return nil, err
 	}
 
 	offsets := make([]uint32, hdr.StringCount)
@@ -704,24 +763,42 @@ func readStringPool(sr *io.SectionReader) (*resStringPool, error) {
 
 	isUTF8 := (hdr.Flags & utf8Flag) != 0
 
+	// Strings in a well-formed pool do not overlap, so together they occupy
+	// at most the chunk. Enforcing that stops a crafted offset table (many
+	// entries pointing into one long run of bytes) from decoding the same
+	// bytes over and over into gigabytes of strings. Entries that repeat an
+	// offset share the already decoded string.
+	seen := make(map[int64]string)
+	var consumed int64
 	for i, off := range offsets {
-		pos := int64(hdr.StringStart + off)
+		pos := int64(hdr.StringStart) + int64(off)
+		if s, ok := seen[pos]; ok {
+			pool.strings[i] = s
+			continue
+		}
 		if _, err := sr.Seek(pos, io.SeekStart); err != nil {
 			return nil, err
 		}
+		var s string
+		var err error
 		if isUTF8 {
-			s, err := readUTF8String(sr)
-			if err != nil {
-				return nil, err
-			}
-			pool.strings[i] = s
+			s, err = readUTF8String(sr)
 		} else {
-			s, err := readUTF16String(sr)
-			if err != nil {
-				return nil, err
-			}
-			pool.strings[i] = s
+			s, err = readUTF16String(sr)
 		}
+		if err != nil {
+			return nil, err
+		}
+		end, err := sr.Seek(0, io.SeekCurrent)
+		if err != nil {
+			return nil, err
+		}
+		consumed += end - pos
+		if consumed > poolSize {
+			return nil, fmt.Errorf("string pool: strings overlap, %d bytes decoded from a %d-byte pool", consumed, poolSize)
+		}
+		seen[pos] = s
+		pool.strings[i] = s
 	}
 
 	return pool, nil
@@ -903,12 +980,22 @@ func (f *xmlFile) readStartElem(sr *io.SectionReader) error {
 		return nil // not fatal
 	}
 
+	// Attribute records are laid out at a stride of AttributeSize. aapt
+	// always writes whole, non-overlapping records; a smaller stride would
+	// let one 20-byte record be replayed up to 65535 times.
+	if ext.AttributeCount > 1 && int(ext.AttributeSize) < binary.Size(resXMLTreeAttribute{}) {
+		return fmt.Errorf("binary XML: attribute size %d is smaller than an attribute record", ext.AttributeSize)
+	}
+
 	tag := f.addNSPrefix(ext.NS, ext.Name)
 	f.buf.WriteString("<")
 	f.buf.WriteString(tag)
 
 	// write namespace declarations
 	for uri, prefix := range f.namespaces {
+		if f.buf.Len() > maxDecodedXMLBytes {
+			return errDecodedXMLTooLarge
+		}
 		if f.hasString(uri) && f.hasString(prefix) {
 			fmt.Fprintf(&f.buf, " xmlns:%s=\"", f.getString(prefix))
 			xml.Escape(&f.buf, []byte(f.getString(uri)))
@@ -917,8 +1004,11 @@ func (f *xmlFile) readStartElem(sr *io.SectionReader) error {
 	}
 
 	// write attributes
-	offset := int64(ext.AttributeStart + node.Header.HeaderSize)
+	offset := int64(ext.AttributeStart) + int64(node.Header.HeaderSize)
 	for range int(ext.AttributeCount) {
+		if f.buf.Len() > maxDecodedXMLBytes {
+			return errDecodedXMLTooLarge
+		}
 		if _, err := sr.Seek(offset, io.SeekStart); err != nil {
 			return err
 		}
@@ -1048,11 +1138,11 @@ const (
 	resTableTypeSpecType uint16 = 0x0202
 )
 
-func newTableFile(r io.ReaderAt) (*tableFile, error) {
+func newTableFile(data []byte) (*tableFile, error) {
 	tf := &tableFile{
 		packages: make(map[uint32]*tablePackage),
 	}
-	sr := io.NewSectionReader(r, 0, 1<<63-1)
+	sr := io.NewSectionReader(bytes.NewReader(data), 0, int64(len(data)))
 	var header resTableHeader
 	if err := binary.Read(sr, binary.LittleEndian, &header); err != nil {
 		return nil, err
@@ -1060,7 +1150,7 @@ func newTableFile(r io.ReaderAt) (*tableFile, error) {
 
 	offset := int64(header.Header.HeaderSize)
 	for offset < int64(header.Header.Size) {
-		ch, err := tf.readTableChunk(r, offset)
+		ch, err := tf.readTableChunk(sr, offset)
 		if err != nil {
 			return nil, err
 		}
@@ -1069,13 +1159,9 @@ func newTableFile(r io.ReaderAt) (*tableFile, error) {
 	return tf, nil
 }
 
-func (tf *tableFile) readTableChunk(r io.ReaderAt, offset int64) (*resChunkHeader, error) {
-	sr := io.NewSectionReader(r, offset, 1<<63-1-offset)
-	var ch resChunkHeader
-	if err := binary.Read(sr, binary.LittleEndian, &ch); err != nil {
-		return nil, err
-	}
-	if _, err := sr.Seek(0, io.SeekStart); err != nil {
+func (tf *tableFile) readTableChunk(file *io.SectionReader, offset int64) (*resChunkHeader, error) {
+	ch, sr, err := openChunk(file, offset)
+	if err != nil {
 		return nil, err
 	}
 	switch ch.Type {
@@ -1104,13 +1190,13 @@ func readTablePackage(sr *io.SectionReader) (*tablePackage, error) {
 	pkg := &tablePackage{header: hdr}
 
 	// Read type strings
-	tsr := io.NewSectionReader(sr, int64(hdr.TypeStrings), int64(hdr.Header.Size-hdr.TypeStrings))
+	tsr := subSection(sr, int64(hdr.TypeStrings), int64(hdr.Header.Size)-int64(hdr.TypeStrings))
 	if pool, err := readStringPool(tsr); err == nil {
 		pkg.typeStrings = pool
 	}
 
 	// Read key strings
-	ksr := io.NewSectionReader(sr, int64(hdr.KeyStrings), int64(hdr.Header.Size-hdr.KeyStrings))
+	ksr := subSection(sr, int64(hdr.KeyStrings), int64(hdr.Header.Size)-int64(hdr.KeyStrings))
 	if pool, err := readStringPool(ksr); err == nil {
 		pkg.keyStrings = pool
 	}
@@ -1122,6 +1208,9 @@ func readTablePackage(sr *io.SectionReader) (*tablePackage, error) {
 		}
 		var ch resChunkHeader
 		if err := binary.Read(sr, binary.LittleEndian, &ch); err != nil {
+			return nil, err
+		}
+		if err := validateChunkSize(ch, offset); err != nil {
 			return nil, err
 		}
 
