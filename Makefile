@@ -34,7 +34,7 @@ clean:
 	rm -rf .coverage
 
 tools:
-	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0
 	# @latest on purpose: locally we want to find out immediately when a new
 	# atago breaks a spec. CI pins an exact version (see the "Install atago"
 	# step in .github/workflows/) so a build stays reproducible.
