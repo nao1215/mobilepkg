@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 jobs:
-  # This is the only workflow that pins Go versions. "1.26" is the floor go.mod
+  # This is the only workflow that pins Go versions. "1.26.9" is the floor go.mod
   # declares -- running it here is the only place that claim is checked -- and
   # "stable" tracks the newest release, which is what catches new vet checks and
   # runtime behavior changes. It is "stable" and not "1": setup-go resolves "1"
@@ -29,7 +29,7 @@ jobs:
           - "windows-latest"
           - "macos-latest"
         go:
-          - "1.26"
+          - "1.26.9"
           - "stable"
       fail-fast: false
     runs-on: ${{ matrix.os }}
