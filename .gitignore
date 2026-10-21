@@ -45,3 +45,4 @@ CLAUDE.md
 
 # GoReleaser output directory
 /dist/
+/third_party_licenses/
