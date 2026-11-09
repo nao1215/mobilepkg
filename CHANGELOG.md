@@ -10,6 +10,8 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 - Building from source now needs Go 1.26.9 or later (was 1.26.6). Go 1.26.9 fixes standard library advisories that this program reaches, including GO-2026-6617 in `net/http`. Prebuilt binaries are unaffected.
 - Updated dependencies, including `github.com/nao1215/markdown` v1.1.1.
+- Release archives and Linux packages now include the license texts of the linked dependencies under THIRD_PARTY_LICENSES/. CI checks dependency licenses on Linux, Windows, and macOS.
+- Dependencies: golang.org/x/image v0.47.0, golang.org/x/sys v0.49.0.
 
 ## [0.5.4] - 2026-09-28
 
