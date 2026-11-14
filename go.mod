@@ -1,6 +1,6 @@
 module github.com/nao1215/mobilepkg
 
-go 1.26.9
+go 1.26.11
 
 require (
 	github.com/izinga/aab-parser v1.0.1
