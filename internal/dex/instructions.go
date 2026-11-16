@@ -218,7 +218,7 @@ func (f *File) scanCodeItem(off int, callerClass, callerMethod string) {
 		}
 	}
 
-	f.scanInsns(data[insnsOff:insnsEnd], uint32(insnsOff), callerClass, callerMethod)
+	f.scanInsns(data[insnsOff:insnsEnd], uint32(insnsOff), callerClass, callerMethod) // #nosec G115 -- insnsOff is a uint32 code_off plus 16, inside data
 }
 
 // scanInsns scans a bytecode instruction stream for invoke-* opcodes.

@@ -104,7 +104,7 @@ func InspectAAB(r io.ReaderAt, size int64, sections uint64, iconSizePx int, maxE
 			if needIcon {
 				var iconConfig *pb.Configuration
 				if iconSizePx > 0 {
-					iconConfig = &pb.Configuration{Density: uint32(iconSizePx * 160 / 48)}
+					iconConfig = &pb.Configuration{Density: uint32(iconSizePx * 160 / 48)} // #nosec G115 -- iconSizePx is positive and set only internally to an icon size
 				}
 				img, iconErr := a.Icon(iconConfig)
 				if iconErr == nil && img != nil {

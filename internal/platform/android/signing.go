@@ -325,11 +325,13 @@ func findAPKSigningBlock(r io.ReaderAt, size int64) ([]byte, error) {
 
 	// Size of block (from footer) — this is the size excluding the 8-byte
 	// size field at the very beginning of the block.
+	// Compare as uint64 before converting: a size of 2^63 or more would turn
+	// negative as an int64 and move blockStart past the central directory.
 	blockSize := binary.LittleEndian.Uint64(footer[0:8])
-	blockStart := int64(cdOffset) - 8 - int64(blockSize)
-	if blockStart < 0 {
+	if blockSize < 24 || blockSize > uint64(cdOffset)-8 {
 		return nil, fmt.Errorf("invalid APK Signing Block size")
 	}
+	blockStart := int64(cdOffset) - 8 - int64(blockSize) // #nosec G115 -- blockSize < cdOffset, checked above
 
 	// Read the entire block.
 	// The block starts with: [size_of_block (8)] [id-value pairs...] [size_of_block (8)] [magic (16)]
@@ -366,14 +368,16 @@ func findBlockByID(block []byte, id uint32) ([]byte, error) {
 		}
 		pairSize := binary.LittleEndian.Uint64(block[pos : pos+8])
 		pos += 8
-		if pairSize < 4 || int(pairSize) > end-pos {
+		// Compare as uint64: int(pairSize) is negative for sizes of 2^63 or more.
+		if pairSize < 4 || pairSize > uint64(end-pos) { // #nosec G115 -- end-pos > 0 inside the loop
 			break
 		}
+		n := int(pairSize) // #nosec G115 -- pairSize <= end-pos, checked above
 		pairID := binary.LittleEndian.Uint32(block[pos : pos+4])
 		if pairID == id {
-			return block[pos+4 : pos+int(pairSize)], nil
+			return block[pos+4 : pos+n], nil
 		}
-		pos += int(pairSize)
+		pos += n
 	}
 
 	return nil, fmt.Errorf("block ID 0x%08x not found", id)
