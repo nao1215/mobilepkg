@@ -191,7 +191,7 @@ func extractReportFromFile(ctx context.Context, path string, opts InspectOptions
 		return nil, extractionResult{}, err
 	}
 
-	f, err := os.Open(path)
+	f, err := os.Open(path) // #nosec G304 -- path is the package file the caller asked to inspect
 	if err != nil {
 		return nil, extractionResult{}, err
 	}

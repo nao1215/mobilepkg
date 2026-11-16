@@ -104,21 +104,21 @@ func buildDEX(strs []string) []byte {
 	dataOff := headerSize + len(ids)
 	var data []byte
 	for i, s := range strs {
-		le.PutUint32(ids[i*4:], uint32(dataOff+len(data))) //nolint:gosec // bounded by the size of a generated file
-		data = appendULEB128(data, uint32(len(s)))         //nolint:gosec // ASCII strings of a few dozen bytes
+		le.PutUint32(ids[i*4:], uint32(dataOff+len(data))) // #nosec G115 -- bounded by the size of a generated file
+		data = appendULEB128(data, uint32(len(s)))         // #nosec G115 -- ASCII strings of a few dozen bytes
 		data = append(data, s...)
 		data = append(data, 0)
 	}
 
 	hdr := make([]byte, headerSize, headerSize+len(ids)+len(data))
 	copy(hdr[0:8], "dex\n035\x00")
-	le.PutUint32(hdr[32:36], uint32(dataOff+len(data))) //nolint:gosec // bounded by the size of a generated file
+	le.PutUint32(hdr[32:36], uint32(dataOff+len(data))) // #nosec G115 -- bounded by the size of a generated file
 	le.PutUint32(hdr[36:40], headerSize)
 	le.PutUint32(hdr[40:44], 0x12345678)
-	le.PutUint32(hdr[56:60], uint32(len(strs))) //nolint:gosec // bounded by -strings
+	le.PutUint32(hdr[56:60], uint32(len(strs))) // #nosec G115 -- bounded by -strings
 	le.PutUint32(hdr[60:64], headerSize)
-	le.PutUint32(hdr[104:108], uint32(len(data))) //nolint:gosec // bounded by the size of a generated file
-	le.PutUint32(hdr[108:112], uint32(dataOff))   //nolint:gosec // bounded by the size of a generated file
+	le.PutUint32(hdr[104:108], uint32(len(data))) // #nosec G115 -- bounded by the size of a generated file
+	le.PutUint32(hdr[108:112], uint32(dataOff))   // #nosec G115 -- bounded by the size of a generated file
 
 	return append(append(hdr, ids...), data...)
 }

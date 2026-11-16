@@ -102,7 +102,7 @@ func run(ctx context.Context, args []string) error {
 		return fmt.Errorf("can not extend PATH: %w", err)
 	}
 
-	version, err := exec.CommandContext(ctx, binary, "version").Output() //nolint:gosec // the path is one this program just built
+	version, err := exec.CommandContext(ctx, binary, "version").Output() // #nosec G204 -- the path is one this program just built
 	if err != nil {
 		return fmt.Errorf("can not run the freshly built mobilepkg: %w", err)
 	}
@@ -115,7 +115,7 @@ func run(ctx context.Context, args []string) error {
 		atagoArgs = append(atagoArgs, filepath.Join(repoRoot, "e2e", "atago"))
 	}
 
-	atago := exec.CommandContext(ctx, "atago", atagoArgs...) //nolint:gosec // a fixed command with author-supplied spec targets
+	atago := exec.CommandContext(ctx, "atago", atagoArgs...) // #nosec G204 G702 -- a fixed command with author-supplied spec targets
 	atago.Dir = repoRoot
 	atago.Stdout = os.Stdout
 	atago.Stderr = os.Stderr

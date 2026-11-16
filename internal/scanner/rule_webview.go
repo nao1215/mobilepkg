@@ -225,7 +225,7 @@ func getPrecedingIntArg(df *dex.File, cs dex.CallSite) int {
 	if off >= 2 {
 		prevInsn := data[off-2 : off]
 		if prevInsn[0] == 0x12 {
-			val := int8(prevInsn[1]) >> 4
+			val := int8(prevInsn[1]) >> 4 // #nosec G115 -- reinterpreting the byte as signed is how the 4-bit literal is decoded
 			return int(val)
 		}
 	}
@@ -269,7 +269,7 @@ func isBoolArgTrue(df *dex.File, cs dex.CallSite) bool {
 		prevInsn := data[off-2 : off]
 		if prevInsn[0] == 0x12 {
 			// The high nibble of byte 1 is the 4-bit signed value.
-			val := int8(prevInsn[1]) >> 4
+			val := int8(prevInsn[1]) >> 4 // #nosec G115 -- reinterpreting the byte as signed is how the 4-bit literal is decoded
 			return val == 1
 		}
 	}

@@ -6,8 +6,13 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+### Security
+
+- Inspecting an APK whose signing block declares a size of 2^63 bytes or more, or whose id-value pair does, returns an error instead of panicking.
+
 ### Changed
 
+- CI scans the repository with gosec and Trivy on every pull request (Trivy covers dependency vulnerabilities, committed secrets and misconfigurations, and also runs daily). Workflow actions are recorded in `.github/workflows/actions.lock`, which CI verifies against the pinned commits.
 - Building from source now needs Go 1.26.11 or later (was 1.26.9). Go 1.26.11 fixes the `net/http` advisory GO-2026-6859, which govulncheck finds reachable from mobilepkg on the earlier patch.
 
 ## [0.5.5] - 2026-11-09
