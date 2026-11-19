@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"sort"
 )
 
 // FailPolicy configures the conditions under which an inspection
@@ -118,40 +117,6 @@ func newFindings(baseline, current []Finding) []Finding {
 		}
 	}
 	return added
-}
-
-// DiffFindings compares two slices of [Finding] and returns which were
-// added and which were removed. The comparison key is ID + Fingerprint.
-func DiffFindings(baseline, current []Finding) (added, removed []Finding) {
-	baseSet := make(map[string]struct{}, len(baseline))
-	for _, f := range baseline {
-		baseSet[f.ID+"\x00"+f.Fingerprint] = struct{}{}
-	}
-	currSet := make(map[string]struct{}, len(current))
-	for _, f := range current {
-		currSet[f.ID+"\x00"+f.Fingerprint] = struct{}{}
-	}
-	for _, f := range current {
-		if _, exists := baseSet[f.ID+"\x00"+f.Fingerprint]; !exists {
-			added = append(added, f)
-		}
-	}
-	for _, f := range baseline {
-		if _, exists := currSet[f.ID+"\x00"+f.Fingerprint]; !exists {
-			removed = append(removed, f)
-		}
-	}
-	// Order by ID, then fingerprint, so findings that share an ID come out
-	// in the same order whatever order the analysis produced them in.
-	less := func(a, b Finding) bool {
-		if a.ID != b.ID {
-			return a.ID < b.ID
-		}
-		return a.Fingerprint < b.Fingerprint
-	}
-	sort.Slice(added, func(i, j int) bool { return less(added[i], added[j]) })
-	sort.Slice(removed, func(i, j int) bool { return less(removed[i], removed[j]) })
-	return added, removed
 }
 
 // LoadReportFile reads and parses a report.json file from the given reader.

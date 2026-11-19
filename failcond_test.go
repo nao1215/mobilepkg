@@ -101,28 +101,6 @@ func TestEvaluateFailConditions_NewOnlyPassesWhenAllExist(t *testing.T) {
 	}
 }
 
-func TestDiffFindings(t *testing.T) {
-	t.Parallel()
-
-	baseline := []mobilepkg.Finding{
-		{ID: "a", Fingerprint: "1"},
-		{ID: "b", Fingerprint: "2"},
-	}
-	current := []mobilepkg.Finding{
-		{ID: "b", Fingerprint: "2"},
-		{ID: "c", Fingerprint: "3"},
-	}
-
-	added, removed := mobilepkg.DiffFindings(baseline, current)
-
-	if len(added) != 1 || added[0].ID != "c" {
-		t.Errorf("added = %v, want [{ID:c}]", added)
-	}
-	if len(removed) != 1 || removed[0].ID != "a" {
-		t.Errorf("removed = %v, want [{ID:a}]", removed)
-	}
-}
-
 func TestLoadReportFile(t *testing.T) {
 	t.Parallel()
 

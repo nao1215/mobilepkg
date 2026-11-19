@@ -206,22 +206,3 @@ func TestCompare_ListsComponentsAndEndpointsSharingANameInAFixedOrder(t *testing
 		}
 	}
 }
-
-func TestDiffFindings_OrdersFindingsSharingAnIDByFingerprint(t *testing.T) {
-	t.Parallel()
-
-	current := []mobilepkg.Finding{
-		{ID: "secret.api_key", Fingerprint: "c"},
-		{ID: "secret.api_key", Fingerprint: "a"},
-		{ID: "secret.api_key", Fingerprint: "b"},
-	}
-	reversed := []mobilepkg.Finding{current[2], current[1], current[0]}
-
-	added, _ := mobilepkg.DiffFindings(nil, current)
-	addedReversed, _ := mobilepkg.DiffFindings(nil, reversed)
-	for i, want := range []string{"a", "b", "c"} {
-		if added[i].Fingerprint != want || addedReversed[i].Fingerprint != want {
-			t.Fatalf("added[%d] fingerprints = %q / %q, want %q", i, added[i].Fingerprint, addedReversed[i].Fingerprint, want)
-		}
-	}
-}
