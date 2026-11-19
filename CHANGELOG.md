@@ -6,9 +6,13 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+### Removed
+
+- `DiffFindings` is removed. Nothing in mobilepkg called it, and the baseline comparison it duplicated is available through `InspectWithBaseline` and `FailPolicy.NewOnly`. pkg.go.dev lists no importers of the module.
+
 ### Fixed
 
-- `Compare`, `mobilepkg compare` and the baseline diff list added and removed components that share a name (an activity and a service with the same class name), endpoints on the same host, and findings that share an ID in a fixed order. They came out in a different order from run to run on the same input, so report.json and the Markdown report changed without the package changing.
+- `Compare`, `mobilepkg compare` and the baseline diff list added and removed components that share a name (an activity and a service with the same class name) and endpoints on the same host in a fixed order. They came out in a different order from run to run on the same input, so report.json and the Markdown report changed without the package changing.
 
 ### Security
 
