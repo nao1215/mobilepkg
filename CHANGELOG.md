@@ -6,6 +6,8 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-19
+
 ### Removed
 
 - `DiffFindings` is removed. Nothing in mobilepkg called it, and the baseline comparison it duplicated is available through `InspectWithBaseline` and `FailPolicy.NewOnly`. pkg.go.dev lists no importers of the module.
