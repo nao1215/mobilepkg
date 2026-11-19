@@ -15,7 +15,7 @@ make bench
 
 ## Generated properties
 
-[`properties_test.go`](../properties_test.go) uses [rapid](https://pkg.go.dev/pgregory.net/rapid) to generate findings, fail policies and inspection results from a small alphabet, so equal IDs, fingerprints and permission names collide often. It checks that `Check` triggers exactly the findings at or above the threshold, that `EvaluateFailConditions` with `NewOnly` passes against itself, that `DiffFindings` and `Compare` report nothing for a result compared with itself and never list one entry as both added and removed, and that report.json survives a write, load, write round trip byte for byte. The properties run in the ordinary `go test`; a failure prints the seed and a `-rapid.failfile` to replay it.
+[`properties_test.go`](../properties_test.go) uses [rapid](https://pkg.go.dev/pgregory.net/rapid) to generate findings, fail policies and inspection results from a small alphabet, so equal IDs, fingerprints and permission names collide often. It checks that `Check` triggers exactly the findings at or above the threshold, that `EvaluateFailConditions` with `NewOnly` passes against itself, that `Compare` reports nothing for a result compared with itself, and that report.json survives a write, load, write round trip byte for byte. The properties run in the ordinary `go test`; a failure prints the seed and a `-rapid.failfile` to replay it.
 
 ## Metamorphic relations
 

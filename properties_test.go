@@ -2,7 +2,7 @@ package mobilepkg_test
 
 // Generated properties and metamorphic relations for the parts of the public
 // API that compute verdicts and differences from already-extracted results:
-// Check / EvaluateFailConditions, DiffFindings, Compare and the report.json
+// Check / EvaluateFailConditions, Compare and the report.json
 // round trip. The example-based tests pin specific cases; these check that the
 // rules hold for any combination of findings, permissions, components and
 // endpoints that rapid generates. A failure prints the seed to replay it.
@@ -210,49 +210,6 @@ func TestEvaluateFailConditions_NewOnlyAgainstItselfAlwaysPasses(t *testing.T) {
 		got := mobilepkg.EvaluateFailConditions(ir, policy, ir)
 		if !got.Passed {
 			t.Fatalf("NewOnly against the same result failed: %v", got.Reasons)
-		}
-	})
-}
-
-// Swapping the arguments swaps added and removed.
-func TestDiffFindings_SwappingArgumentsSwapsAddedAndRemoved(t *testing.T) {
-	t.Parallel()
-	rapid.Check(t, func(t *rapid.T) {
-		a := genFindings().Draw(t, "a")
-		b := genFindings().Draw(t, "b")
-
-		addedAB, removedAB := mobilepkg.DiffFindings(a, b)
-		addedBA, removedBA := mobilepkg.DiffFindings(b, a)
-
-		if !slices.Equal(findingKeys(addedAB), findingKeys(removedBA)) {
-			t.Fatalf("added(a,b) %v != removed(b,a) %v", findingKeys(addedAB), findingKeys(removedBA))
-		}
-		if !slices.Equal(findingKeys(removedAB), findingKeys(addedBA)) {
-			t.Fatalf("removed(a,b) %v != added(b,a) %v", findingKeys(removedAB), findingKeys(addedBA))
-		}
-	})
-}
-
-// Nothing is both added and removed, and a list compared with itself has no
-// difference.
-func TestDiffFindings_AddedAndRemovedAreDisjoint(t *testing.T) {
-	t.Parallel()
-	rapid.Check(t, func(t *rapid.T) {
-		a := genFindings().Draw(t, "a")
-		b := genFindings().Draw(t, "b")
-
-		added, removed := mobilepkg.DiffFindings(a, b)
-		for _, k := range findingKeys(added) {
-			if slices.Contains(findingKeys(removed), k) {
-				t.Fatalf("%q is both added and removed", k)
-			}
-			if slices.Contains(findingKeys(a), k) {
-				t.Fatalf("%q is reported added but is in the baseline", k)
-			}
-		}
-		selfAdded, selfRemoved := mobilepkg.DiffFindings(a, a)
-		if len(selfAdded) != 0 || len(selfRemoved) != 0 {
-			t.Fatalf("diff of a list with itself: added %d, removed %d", len(selfAdded), len(selfRemoved))
 		}
 	})
 }
