@@ -6,6 +6,10 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+### Changed
+
+- CI pins setup-himorime v0.2.1, which keeps the benchmark comment on a pull request and warns instead of failing the job when it cannot post it.
+
 ## [0.6.0] - 2026-11-19
 
 ### Removed
