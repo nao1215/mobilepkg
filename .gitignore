@@ -46,3 +46,6 @@ CLAUDE.md
 # GoReleaser output directory
 /dist/
 /third_party_licenses/
+
+# atago keeps the last failed scenarios here for --rerun-failed.
+.atago/
