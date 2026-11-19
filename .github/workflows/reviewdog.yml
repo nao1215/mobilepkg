@@ -6,6 +6,10 @@ permissions:
 
 # Every job posts its findings as pull request review comments
 # (reporter: github-pr-review), which needs pull-requests: write.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   golangci-lint:
     name: golangci-lint

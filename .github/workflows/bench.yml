@@ -1,7 +1,18 @@
 name: Benchmark
 
 on:
+  # The suite measures the built binary, so a pull request that changes
+  # neither the Go code, the module nor the suite cannot move a number.
+  # Skipping those saves the longest job of a documentation-only pull
+  # request. No branch rule requires this check.
   pull_request:
+    paths:
+      - '**.go'
+      - go.mod
+      - go.sum
+      - 'bench/**'
+      - 'testdata/**'
+      - .github/workflows/bench.yml
   workflow_dispatch:
 
 permissions:
@@ -18,6 +29,10 @@ permissions:
 # and does not fail it. The comparison is written to the job summary.
 #
 # Started by hand, the job measures the ref it runs on without comparing.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   bench:
     runs-on: ubuntu-latest
