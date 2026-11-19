@@ -308,6 +308,17 @@ mobilepkg.WriteRDJSONL(os.Stdout, result.Findings, "app.apk") // reviewdog
 - run: mobilepkg inspect --format markdown app.apk >> "$GITHUB_STEP_SUMMARY"
 ```
 
+## Testing
+
+| Technique | Bug class caught here |
+|---|---|
+| [Examples and unit tests](doc/testing.md#examples-and-unit-tests) | Wrong metadata or findings from the public API |
+| [Generated properties](doc/testing.md#generated-properties) | Verdicts and diffs that break for some combination of findings |
+| [Metamorphic relations](doc/testing.md#metamorphic-relations) | Results that change with input order or argument order |
+| [Fuzzing](doc/testing.md#fuzzing) | Panics and unbounded allocation on malformed DEX, XML and resource tables |
+| [CLI end-to-end tests](doc/testing.md#cli-end-to-end-tests) | Wrong exit codes, flags and messages of the binary |
+| [Paired CI benchmarks](doc/testing.md#paired-ci-benchmarks) | Slower inspection hidden by runner noise |
+
 ## Test Data
 
 Examples use [AndroGoat](https://github.com/satishpatnayak/AndroGoat) ([v2.0.1](https://github.com/satishpatnayak/AndroGoat/releases/tag/v2.0.1)), an intentionally vulnerable Android app. The APK is under `testdata/no_commit/` for local testing only and is not committed.
