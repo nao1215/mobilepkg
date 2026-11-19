@@ -151,3 +151,77 @@ func TestDiffReports(t *testing.T) {
 		}
 	})
 }
+
+func TestCompare_ListsComponentsAndEndpointsSharingANameInAFixedOrder(t *testing.T) {
+	t.Parallel()
+
+	oldIR := &mobilepkg.InspectResult{Platform: mobilepkg.PlatformAndroid}
+	newIR := &mobilepkg.InspectResult{
+		Platform: mobilepkg.PlatformAndroid,
+		ExportedComponents: []mobilepkg.ExportedComponent{
+			{Kind: "service", Name: "com.example.Sync", Exported: true},
+			{Kind: "activity", Name: "com.example.Sync", Exported: true},
+			{Kind: "receiver", Name: "com.example.Sync", Exported: true},
+			{Kind: "provider", Name: "com.example.Sync", Exported: true},
+		},
+		NetworkEndpoints: []mobilepkg.NetworkEndpoint{
+			{Scheme: "https", Host: "api.example.com", Path: "/v2", Source: "manifest"},
+			{Scheme: "http", Host: "api.example.com", Source: "manifest"},
+			{Scheme: "https", Host: "api.example.com", Source: "manifest"},
+			{Scheme: "https", Host: "api.example.com", Path: "/v1", Source: "manifest"},
+		},
+	}
+	wantKinds := []string{"activity", "provider", "receiver", "service"}
+	wantEndpoints := []string{
+		"http://api.example.com",
+		"https://api.example.com",
+		"https://api.example.com/v1",
+		"https://api.example.com/v2",
+	}
+
+	// Map iteration order varies between calls, so a single call can pass
+	// by luck; repeat to make an unordered result show up.
+	for range 50 {
+		d := mobilepkg.Compare(oldIR, newIR)
+		for i, c := range d.AddedComponents {
+			if c.Kind != wantKinds[i] {
+				t.Fatalf("AddedComponents[%d].Kind = %q, want %q (order %v)", i, c.Kind, wantKinds[i], d.AddedComponents)
+			}
+		}
+		for i, e := range d.AddedEndpoints {
+			if got := e.Scheme + "://" + e.Host + e.Path; got != wantEndpoints[i] {
+				t.Fatalf("AddedEndpoints[%d] = %q, want %q", i, got, wantEndpoints[i])
+			}
+		}
+		rd := mobilepkg.Compare(newIR, oldIR)
+		for i, c := range rd.RemovedComponents {
+			if c.Kind != wantKinds[i] {
+				t.Fatalf("RemovedComponents[%d].Kind = %q, want %q", i, c.Kind, wantKinds[i])
+			}
+		}
+		for i, e := range rd.RemovedEndpoints {
+			if got := e.Scheme + "://" + e.Host + e.Path; got != wantEndpoints[i] {
+				t.Fatalf("RemovedEndpoints[%d] = %q, want %q", i, got, wantEndpoints[i])
+			}
+		}
+	}
+}
+
+func TestDiffFindings_OrdersFindingsSharingAnIDByFingerprint(t *testing.T) {
+	t.Parallel()
+
+	current := []mobilepkg.Finding{
+		{ID: "secret.api_key", Fingerprint: "c"},
+		{ID: "secret.api_key", Fingerprint: "a"},
+		{ID: "secret.api_key", Fingerprint: "b"},
+	}
+	reversed := []mobilepkg.Finding{current[2], current[1], current[0]}
+
+	added, _ := mobilepkg.DiffFindings(nil, current)
+	addedReversed, _ := mobilepkg.DiffFindings(nil, reversed)
+	for i, want := range []string{"a", "b", "c"} {
+		if added[i].Fingerprint != want || addedReversed[i].Fingerprint != want {
+			t.Fatalf("added[%d] fingerprints = %q / %q, want %q", i, added[i].Fingerprint, addedReversed[i].Fingerprint, want)
+		}
+	}
+}

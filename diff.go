@@ -83,8 +83,16 @@ func diffComponents(oldComps, newComps []ExportedComponent) (added, removed []Ex
 			removed = append(removed, c)
 		}
 	}
-	sort.Slice(added, func(i, j int) bool { return added[i].Name < added[j].Name })
-	sort.Slice(removed, func(i, j int) bool { return removed[i].Name < removed[j].Name })
+	// Sort by name, then kind: the lists are built from map iteration, so
+	// sorting by name alone left components that share a name in random order.
+	less := func(a, b ExportedComponent) bool {
+		if a.Name != b.Name {
+			return a.Name < b.Name
+		}
+		return a.Kind < b.Kind
+	}
+	sort.Slice(added, func(i, j int) bool { return less(added[i], added[j]) })
+	sort.Slice(removed, func(i, j int) bool { return less(removed[i], removed[j]) })
 	return added, removed
 }
 
@@ -108,7 +116,15 @@ func diffEndpoints(oldEPs, newEPs []NetworkEndpoint) (added, removed []NetworkEn
 			removed = append(removed, e)
 		}
 	}
-	sort.Slice(added, func(i, j int) bool { return added[i].Host < added[j].Host })
-	sort.Slice(removed, func(i, j int) bool { return removed[i].Host < removed[j].Host })
+	// Sort by host, then by the full key, so endpoints on one host keep a
+	// fixed order instead of the map iteration order.
+	less := func(a, b NetworkEndpoint) bool {
+		if a.Host != b.Host {
+			return a.Host < b.Host
+		}
+		return key(a) < key(b)
+	}
+	sort.Slice(added, func(i, j int) bool { return less(added[i], added[j]) })
+	sort.Slice(removed, func(i, j int) bool { return less(removed[i], removed[j]) })
 	return added, removed
 }
