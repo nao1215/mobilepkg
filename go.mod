@@ -4,7 +4,7 @@ go 1.26.11
 
 require (
 	github.com/izinga/aab-parser v1.0.1
-	github.com/nao1215/markdown v1.1.1
+	github.com/nao1215/markdown v1.1.2
 	github.com/stretchr/testify v1.12.1
 	google.golang.org/protobuf v1.36.12
 	howett.net/plist v1.0.1
@@ -15,7 +15,7 @@ require (
 	github.com/clipperhouse/displaywidth v0.11.0 // indirect
 	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
 	github.com/fatih/color v1.19.0 // indirect
-	github.com/goccy/go-json v0.11.2 // indirect
+	github.com/goccy/go-json v0.12.0 // indirect
 	github.com/karrick/godirwalk v1.17.0 // indirect
 	github.com/mattn/go-colorable v0.1.16 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
@@ -26,6 +26,6 @@ require (
 	github.com/olekukonko/tablewriter v1.1.5 // indirect
 	github.com/xmxu/aab-parser v0.1.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
-	golang.org/x/image v0.47.0 // indirect
-	golang.org/x/sys v0.49.0 // indirect
+	golang.org/x/image v0.48.0 // indirect
+	golang.org/x/sys v0.50.0 // indirect
 )
