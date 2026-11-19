@@ -141,8 +141,16 @@ func DiffFindings(baseline, current []Finding) (added, removed []Finding) {
 			removed = append(removed, f)
 		}
 	}
-	sort.Slice(added, func(i, j int) bool { return added[i].ID < added[j].ID })
-	sort.Slice(removed, func(i, j int) bool { return removed[i].ID < removed[j].ID })
+	// Order by ID, then fingerprint, so findings that share an ID come out
+	// in the same order whatever order the analysis produced them in.
+	less := func(a, b Finding) bool {
+		if a.ID != b.ID {
+			return a.ID < b.ID
+		}
+		return a.Fingerprint < b.Fingerprint
+	}
+	sort.Slice(added, func(i, j int) bool { return less(added[i], added[j]) })
+	sort.Slice(removed, func(i, j int) bool { return less(removed[i], removed[j]) })
 	return added, removed
 }
 
