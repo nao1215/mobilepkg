@@ -13,6 +13,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ### Changed
 
 - CI scans the repository with gosec and Trivy on every pull request (Trivy covers dependency vulnerabilities, committed secrets and misconfigurations, and also runs daily). Workflow actions are recorded in `.github/workflows/actions.lock`, which CI verifies against the pinned commits.
+- Dependencies updated: github.com/nao1215/markdown v1.1.2, github.com/goccy/go-json v0.12.0, golang.org/x/image v0.48.0, golang.org/x/sys v0.50.0. CI runs atago v0.26.1, himorime v0.6.0 and govulncheck v1.10.0.
 - Building from source now needs Go 1.26.11 or later (was 1.26.9). Go 1.26.11 fixes the `net/http` advisory GO-2026-6859, which govulncheck finds reachable from mobilepkg on the earlier patch.
 
 ## [0.5.5] - 2026-11-09
