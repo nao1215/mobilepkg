@@ -21,6 +21,12 @@ permissions:
 jobs:
   bench:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # setup-himorime (v0.2.0 and later) posts one comment listing
+      # regressions, errors and skipped checks on a same-repository pull
+      # request, and fails the job when it cannot.
+      pull-requests: write
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
