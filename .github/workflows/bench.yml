@@ -21,6 +21,12 @@ permissions:
 jobs:
   bench:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # setup-himorime (v0.2.0 and later) posts one comment listing
+      # regressions, errors and skipped checks on a same-repository pull
+      # request, and fails the job when it cannot.
+      pull-requests: write
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -31,9 +37,9 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-      - uses: nao1215/setup-himorime@14aeeb3fe55ad42cf29ee0802d578820faac3897 # v0.1.2
+      - uses: nao1215/setup-himorime@cae68ae0fcf303571b53dde1a73582fbc596857a # v0.2.0
         with:
-          version: v0.6.0
+          version: v0.6.1
       - name: Compare the base with the head
         if: github.event_name == 'pull_request'
         run: himorime ci --output "$RUNNER_TEMP/himorime.json" --format json bench
