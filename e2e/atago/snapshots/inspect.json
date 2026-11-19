@@ -1,0 +1,421 @@
+{
+  "schema_version": "1.0.0",
+  "tool_version": "<VERSION>",
+  "result": {
+    "platform": "android",
+    "format": "apk",
+    "identity": {
+      "identifier": "owasp.sat.agoat",
+      "display_name": "AndroGoat - Insecure App (Kotlin)"
+    },
+    "version": {
+      "marketing": "1.0",
+      "build": "1"
+    },
+    "entry": {
+      "kind": "activity",
+      "name": "owasp.sat.agoat.SplashActivity"
+    },
+    "sdk": {
+      "min_sdk": "19",
+      "target_sdk": "33"
+    },
+    "signing": {
+      "scheme": "v1",
+      "certificates": [
+        {
+          "subject": "Android Debug",
+          "issuer": "Android Debug",
+          "not_before": "<timestamp>",
+          "not_after": "<timestamp>",
+          "sha256_fingerprint": "0fbee68b42d0214a0800364ebf0eda61658761e0d8fe881eea7f0c4a5f3fd1ad",
+          "serial_number": "1",
+          "signature_algorithm": "SHA256-RSA",
+          "public_key_algorithm": "RSA",
+          "key_size": 2048,
+          "self_signed": true
+        }
+      ]
+    },
+    "icon": {
+      "path": "res/mipmap-mdpi-v4/ic_launcher.png",
+      "format": "png",
+      "width": 48,
+      "height": 48
+    },
+    "debuggable": true,
+    "test_only": false,
+    "profileable_by_shell": false,
+    "allow_backup": true,
+    "uses_cleartext_traffic": false,
+    "network_security_config": "@0x7F130000",
+    "nsc_policy": {
+      "cleartext_permitted": true,
+      "domain_configs": [
+        {
+          "domains": [
+            ""
+          ],
+          "cleartext_permitted": true,
+          "has_pin_set": true
+        }
+      ],
+      "trust_anchors": [
+        "system",
+        "user"
+      ],
+      "has_pin_set": true
+    },
+    "permissions": [
+      {
+        "canonical": "camera",
+        "raw_name": "android.permission.CAMERA",
+        "source": "manifest"
+      },
+      {
+        "canonical": "network",
+        "raw_name": "android.permission.INTERNET",
+        "source": "manifest"
+      },
+      {
+        "canonical": "storage",
+        "raw_name": "android.permission.READ_EXTERNAL_STORAGE",
+        "source": "manifest"
+      },
+      {
+        "canonical": "biometrics",
+        "raw_name": "android.permission.USE_BIOMETRIC",
+        "source": "manifest"
+      },
+      {
+        "canonical": "biometrics",
+        "raw_name": "android.permission.USE_FINGERPRINT",
+        "source": "manifest"
+      },
+      {
+        "canonical": "storage",
+        "raw_name": "android.permission.WRITE_EXTERNAL_STORAGE",
+        "source": "manifest"
+      },
+      {
+        "raw_name": "owasp.sat.agoat.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION",
+        "source": "manifest"
+      }
+    ],
+    "exported_components": [
+      {
+        "kind": "activity",
+        "name": "owasp.sat.agoat.AccessControl1ViewActivity",
+        "exported": true,
+        "intent_filters": [
+          {
+            "actions": [
+              "android.intent.action.VIEW"
+            ],
+            "categories": [
+              "android.intent.category.DEFAULT"
+            ],
+            "data": [
+              {
+                "scheme": "androgoat",
+                "host": "vulnapp"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "kind": "activity",
+        "name": "owasp.sat.agoat.SplashActivity",
+        "exported": true,
+        "intent_filters": [
+          {
+            "actions": [
+              "android.intent.action.MAIN"
+            ],
+            "categories": [
+              "android.intent.category.LAUNCHER"
+            ]
+          }
+        ]
+      },
+      {
+        "kind": "provider",
+        "name": "owasp.sat.agoat.ContentProviderActivity",
+        "exported": true,
+        "authorities": "owasp.sat.agoat.provider.userpinsprovider"
+      },
+      {
+        "kind": "receiver",
+        "name": "androidx.profileinstaller.ProfileInstallReceiver",
+        "exported": true,
+        "permission": "android.permission.DUMP",
+        "intent_filters": [
+          {
+            "actions": [
+              "androidx.profileinstaller.action.INSTALL_PROFILE"
+            ]
+          },
+          {
+            "actions": [
+              "androidx.profileinstaller.action.SKIP_FILE"
+            ]
+          },
+          {
+            "actions": [
+              "androidx.profileinstaller.action.SAVE_PROFILE"
+            ]
+          },
+          {
+            "actions": [
+              "androidx.profileinstaller.action.BENCHMARK_OPERATION"
+            ]
+          }
+        ]
+      },
+      {
+        "kind": "receiver",
+        "name": "owasp.sat.agoat.ShowDataReceiver",
+        "exported": true
+      },
+      {
+        "kind": "service",
+        "name": "owasp.sat.agoat.DownloadInvoiceService",
+        "exported": true
+      }
+    ],
+    "network_endpoints": [
+      {
+        "scheme": "androgoat",
+        "host": "vulnapp",
+        "source": "intent_filter",
+        "confidence": "high"
+      }
+    ],
+    "findings": [
+      {
+        "id": "exported.activity.owasp.sat.agoat.AccessControl1ViewActivity",
+        "category": "exported_component",
+        "severity": "info",
+        "confidence": "high",
+        "message": "exported activity: owasp.sat.agoat.AccessControl1ViewActivity (no permission required)",
+        "evidence": [
+          {
+            "archive_path": "AndroidManifest.xml",
+            "field": "activity[@name]",
+            "matched_text_masked": "owasp.sat.agoat.AccessControl1ViewActivity"
+          }
+        ],
+        "fingerprint": "aef3387c35170bcf"
+      },
+      {
+        "id": "exported.activity.owasp.sat.agoat.SplashActivity",
+        "category": "exported_component",
+        "severity": "info",
+        "confidence": "high",
+        "message": "exported activity: owasp.sat.agoat.SplashActivity (no permission required)",
+        "evidence": [
+          {
+            "archive_path": "AndroidManifest.xml",
+            "field": "activity[@name]",
+            "matched_text_masked": "owasp.sat.agoat.SplashActivity"
+          }
+        ],
+        "fingerprint": "31ca1a7565bddb12"
+      },
+      {
+        "id": "exported.provider.owasp.sat.agoat.ContentProviderActivity",
+        "category": "exported_component",
+        "severity": "error",
+        "confidence": "high",
+        "message": "exported provider: owasp.sat.agoat.ContentProviderActivity (no permission required) [authorities: owasp.sat.agoat.provider.userpinsprovider]",
+        "evidence": [
+          {
+            "archive_path": "AndroidManifest.xml",
+            "field": "provider[@name]",
+            "matched_text_masked": "owasp.sat.agoat.ContentProviderActivity"
+          }
+        ],
+        "fingerprint": "6f2f4941345d79ce"
+      },
+      {
+        "id": "exported.receiver.androidx.profileinstaller.ProfileInstallReceiver",
+        "category": "exported_component",
+        "severity": "info",
+        "confidence": "high",
+        "message": "exported receiver: androidx.profileinstaller.ProfileInstallReceiver (requires android.permission.DUMP)",
+        "evidence": [
+          {
+            "archive_path": "AndroidManifest.xml",
+            "field": "receiver[@name]",
+            "matched_text_masked": "androidx.profileinstaller.ProfileInstallReceiver"
+          }
+        ],
+        "fingerprint": "497d9e387801db67"
+      },
+      {
+        "id": "exported.receiver.owasp.sat.agoat.ShowDataReceiver",
+        "category": "exported_component",
+        "severity": "warn",
+        "confidence": "high",
+        "message": "exported receiver: owasp.sat.agoat.ShowDataReceiver (no permission required)",
+        "evidence": [
+          {
+            "archive_path": "AndroidManifest.xml",
+            "field": "receiver[@name]",
+            "matched_text_masked": "owasp.sat.agoat.ShowDataReceiver"
+          }
+        ],
+        "fingerprint": "3fee82b9b57784d1"
+      },
+      {
+        "id": "exported.service.owasp.sat.agoat.DownloadInvoiceService",
+        "category": "exported_component",
+        "severity": "warn",
+        "confidence": "high",
+        "message": "exported service: owasp.sat.agoat.DownloadInvoiceService (no permission required)",
+        "evidence": [
+          {
+            "archive_path": "AndroidManifest.xml",
+            "field": "service[@name]",
+            "matched_text_masked": "owasp.sat.agoat.DownloadInvoiceService"
+          }
+        ],
+        "fingerprint": "ac5f17a3761aa6cc"
+      },
+      {
+        "id": "manifest.allow_backup",
+        "category": "manifest",
+        "severity": "warn",
+        "confidence": "high",
+        "message": "application allows backup — app data can be extracted via adb backup",
+        "evidence": [
+          {
+            "archive_path": "AndroidManifest.xml",
+            "field": "application[@allowBackup]"
+          }
+        ],
+        "fingerprint": "1eae1b98f50133e4"
+      },
+      {
+        "id": "manifest.debuggable",
+        "category": "manifest",
+        "severity": "error",
+        "confidence": "high",
+        "message": "application is debuggable — allows arbitrary code execution via adb on any device",
+        "evidence": [
+          {
+            "archive_path": "AndroidManifest.xml",
+            "field": "application[@debuggable]"
+          }
+        ],
+        "fingerprint": "cfdad16a5de2d41e"
+      },
+      {
+        "id": "nsc.base_config_cleartext",
+        "category": "cleartext",
+        "severity": "warn",
+        "confidence": "high",
+        "message": "network security config base-config permits cleartext traffic",
+        "evidence": [
+          {
+            "archive_path": "network_security_config.xml",
+            "field": "base-config[@cleartextTrafficPermitted]"
+          }
+        ],
+        "fingerprint": "62e22f5a0fc0d77d"
+      },
+      {
+        "id": "nsc.domain_cleartext.",
+        "category": "cleartext",
+        "severity": "warn",
+        "confidence": "high",
+        "message": "network security config permits cleartext traffic for: ",
+        "evidence": [
+          {
+            "archive_path": "network_security_config.xml",
+            "field": "domain-config[@cleartextTrafficPermitted]"
+          }
+        ],
+        "fingerprint": "c0fc9dd331c22b7b"
+      },
+      {
+        "id": "perm.dangerous.android.permission.CAMERA",
+        "category": "permission",
+        "severity": "info",
+        "confidence": "high",
+        "message": "dangerous permission android.permission.CAMERA — can access the camera",
+        "evidence": [
+          {
+            "archive_path": "AndroidManifest.xml",
+            "field": "uses-permission",
+            "matched_text_masked": "android.permission.CAMERA"
+          }
+        ],
+        "fingerprint": "403bf2418a4a2925"
+      },
+      {
+        "id": "perm.dangerous.android.permission.READ_EXTERNAL_STORAGE",
+        "category": "permission",
+        "severity": "info",
+        "confidence": "high",
+        "message": "dangerous permission android.permission.READ_EXTERNAL_STORAGE — can read external storage",
+        "evidence": [
+          {
+            "archive_path": "AndroidManifest.xml",
+            "field": "uses-permission",
+            "matched_text_masked": "android.permission.READ_EXTERNAL_STORAGE"
+          }
+        ],
+        "fingerprint": "fc9e341dbece3a21"
+      },
+      {
+        "id": "perm.dangerous.android.permission.WRITE_EXTERNAL_STORAGE",
+        "category": "permission",
+        "severity": "info",
+        "confidence": "high",
+        "message": "dangerous permission android.permission.WRITE_EXTERNAL_STORAGE — can write to external storage",
+        "evidence": [
+          {
+            "archive_path": "AndroidManifest.xml",
+            "field": "uses-permission",
+            "matched_text_masked": "android.permission.WRITE_EXTERNAL_STORAGE"
+          }
+        ],
+        "fingerprint": "43d199755552ff7c"
+      },
+      {
+        "id": "signing.debug_cert",
+        "category": "signing",
+        "severity": "error",
+        "confidence": "high",
+        "message": "signed with debug certificate (subject: Android Debug) — not suitable for production",
+        "evidence": [
+          {
+            "archive_path": "",
+            "field": "certificate.subject",
+            "matched_text_masked": "Android Debug"
+          }
+        ],
+        "fingerprint": "1212d5dc7fde04d7"
+      },
+      {
+        "id": "signing.v1_only",
+        "category": "signing",
+        "severity": "warn",
+        "confidence": "high",
+        "message": "APK uses v1 (JAR) signing only — vulnerable to modification without invalidating signature",
+        "evidence": [
+          {
+            "archive_path": "",
+            "field": "signing.scheme",
+            "matched_text_masked": "v1"
+          }
+        ],
+        "fingerprint": "5e54be8f5849234e"
+      }
+    ],
+    "secret_candidates": [],
+    "diagnostics": []
+  }
+}

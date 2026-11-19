@@ -317,6 +317,8 @@ mobilepkg.WriteRDJSONL(os.Stdout, result.Findings, "app.apk") // reviewdog
 | [Metamorphic relations](doc/testing.md#metamorphic-relations) | Results that change with input order or argument order |
 | [Fuzzing](doc/testing.md#fuzzing) | Panics and unbounded allocation on malformed DEX, XML and resource tables |
 | [CLI end-to-end tests](doc/testing.md#cli-end-to-end-tests) | Wrong exit codes, flags and messages of the binary |
+| [Output snapshots](doc/testing.md#output-snapshots) | Unintended changes to the Markdown and JSON reports |
+| [Mutation testing](doc/testing.md#mutation-testing) | Tests that still pass when a comparison or branch is changed |
 | [Paired CI benchmarks](doc/testing.md#paired-ci-benchmarks) | Slower inspection hidden by runner noise |
 
 ## Test Data

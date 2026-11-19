@@ -1,0 +1,54 @@
+# Snapshot tests for the reports mobilepkg writes. The other specs check single
+# fields; these pin the whole rendered output for the committed AndroGoat APK,
+# so an unintended change to the Markdown layout, the JSON field order, the
+# finding list or the RDJSONL lines fails with a diff. The tool version in the
+# output depends on the build, so it is scrubbed to a placeholder.
+#
+# Record or refresh the snapshots after an intended output change with:
+#   atago snapshot update e2e/atago/snapshot.atago.yaml
+# Run with: make e2e   (or go run ./e2e/runner)
+version: "1"
+
+suite:
+  name: mobilepkg output snapshots
+
+scrub:
+  - {pattern: 'mobilepkg v[^ ]+ \(schema', placeholder: 'mobilepkg <VERSION> (schema'}
+  - {pattern: '"tool_version": "[^"]*"', placeholder: '"tool_version": "<VERSION>"'}
+
+scenarios:
+  - name: inspect renders the Markdown report exactly
+    steps:
+      - fixture:
+          file: app.apk
+          from: ../../testdata/android/androgoat_rich.apk
+      - run:
+          command: mobilepkg inspect --format markdown app.apk
+      - assert:
+          exit_code: 0
+          stdout:
+            snapshot: snapshots/inspect_markdown.md
+
+  - name: inspect writes the JSON report exactly
+    steps:
+      - fixture:
+          file: app.apk
+          from: ../../testdata/android/androgoat_rich.apk
+      - run:
+          command: mobilepkg inspect app.apk
+      - assert:
+          exit_code: 0
+          stdout:
+            snapshot: snapshots/inspect.json
+
+  - name: compare writes the self-diff JSON exactly
+    steps:
+      - fixture:
+          file: app.apk
+          from: ../../testdata/android/androgoat_rich.apk
+      - run:
+          command: mobilepkg compare app.apk app.apk
+      - assert:
+          exit_code: 0
+          stdout:
+            snapshot: snapshots/compare_self.json

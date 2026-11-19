@@ -29,6 +29,16 @@ The same file relates two runs whose outputs must agree without knowing either o
 
 `e2e/atago/*.atago.yaml` runs the built `mobilepkg` binary with [atago](https://github.com/nao1215/atago) on Linux, macOS and Windows: exit codes, `--fail-on`, baselines, compare, error messages, and the commands shown in the README (`make e2e`, `.github/workflows/e2e.yml`).
 
+## Output snapshots
+
+[`e2e/atago/snapshot.atago.yaml`](../e2e/atago/snapshot.atago.yaml) pins the whole Markdown report, the whole JSON report and the self-compare JSON of the committed AndroGoat APK under `e2e/atago/snapshots/`. The tool version is scrubbed to a placeholder, so only an unintended change to the layout, the field order or the finding list fails, with a diff. After an intended output change, refresh them with `atago snapshot update e2e/atago/snapshot.atago.yaml` and review the diff in the pull request.
+
+## Mutation testing
+
+[gremlins](https://github.com/go-gremlins/gremlins) rewrites one expression at a time (a comparison, an arithmetic operator, a negated condition) and checks that some test fails. `.github/workflows/mutation.yml` mutates every package weekly and, on a pull request, only the lines it changes. Run it locally from the repository root with `gremlins unleash --workers 2 .`.
+
+Recorded baseline (2026-11-19, gremlins v0.6.0, whole module): 659 killed, 422 lived, 210 not covered, 1 timed out. Test efficacy, killed / (killed + lived), is 60.96%; mutator coverage is 83.73%. The survivors cluster in the Android package reader (internal/platform/android/inspect.go 91, signing.go 53) and the DEX parser (internal/dex/parse.go 43), where an off-by-one or a negated check still reads the synthetic fixtures. CI reports the score and does not gate on it yet; a later gate may only check that the score does not fall below this value.
+
 ## Paired CI benchmarks
 
 `bench/himorime.yaml` measures `inspect` on generated APKs with [himorime](https://github.com/nao1215/himorime). On a pull request, `.github/workflows/bench.yml` builds the base and the head and measures them in alternating rounds on the same runner, so runner noise affects both. See [bench/README.md](../bench/README.md).
