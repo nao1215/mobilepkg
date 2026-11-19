@@ -10,6 +10,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   # This is the only workflow that pins Go versions. "1.26.11" is the floor go.mod
   # declares -- running it here is the only place that claim is checked -- and
