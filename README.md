@@ -21,25 +21,23 @@
 
 ![logo](./doc/image/mobilepkg_small_logo.png)
 
-mobilepkg inspects APK, AAB, APKS, XAPK, and IPA files and emits package metadata plus security findings as JSON, Markdown, or RDJSONL. It is intended for release triage and CI checks.
+mobilepkg inspects APK, AAB, APKS, XAPK, and IPA files for release triage and CI checks, and writes package metadata and security findings as JSON, Markdown, or RDJSONL. It reads the package as a zip archive and parses the manifest and DEX bytecode in-process, so it needs no Android SDK, Xcode, or device. It runs on Linux, Windows, and macOS (Go 1.26.11+).
 
-It reads the package as a zip archive, parses the manifest and DEX bytecode in-process, and finishes in seconds. No Android SDK, Xcode, or device required. Runs on Linux, Windows, and macOS (Go 1.26.11+).
+In a GitHub Actions workflow:
 
-## Scope
+```yaml
+- run: mobilepkg inspect --fail-on warn app.apk > report.json
+- run: mobilepkg inspect --format markdown app.apk >> "$GITHUB_STEP_SUMMARY"
+```
 
-- Manifest metadata, signing info, permissions, exported components, deep links, and network endpoints from Android packages (APK, XAPK, APKS, AAB).
-- DEX bytecode scanning across base and split APKs for hardcoded secrets, cleartext HTTP URLs, dangerous API calls, and insecure WebView configuration.
-- XAPK and APKS bundles read directly — no prior extraction needed.
-- Markdown reports for `$GITHUB_STEP_SUMMARY` and pull request comments.
-- Baseline diff for tracking permission, component, and version changes between releases.
-- CI integration: `--fail-on warn` exits non-zero when findings exceed a severity threshold.
+For Android packages it reports manifest metadata, signing, permissions, exported components, deep links and network endpoints, and scans the DEX bytecode of base and split APKs for hardcoded secrets, cleartext HTTP URLs, dangerous API calls and insecure WebView settings. XAPK and APKS bundles need no extraction first. A baseline diff tracks permission, component and version changes between releases, and `--fail-on warn` exits non-zero when findings reach a severity.
 
 ### Known limitations and common false positives
 
-- On well-maintained production apps, mobilepkg typically reports `allow_backup`, a few exported components, and some dangerous API calls from third-party libraries. Library-originated API calls (e.g. crash reporters using `Runtime.exec`) are automatically downgraded to `warn/medium`.
-- Cleartext URL findings from DEX strings may include legitimate logging or configuration endpoints that happen to use HTTP.
-- iOS IPA inspection covers entitlements, ATS settings, code signing certificates, provisioning profile expiry, URL schemes, and associated domains. It does not scan compiled Swift/ObjC binaries for API calls or secrets. Android inspection is deeper.
-- WebView argument tracking is lightweight: it checks the immediately preceding `const/4` or `const/16` instruction. Non-trivial argument flow (e.g. values loaded from fields or computed) falls back to conservative reporting.
+- Production apps usually get `allow_backup`, a few exported components, and some dangerous API calls from third-party libraries. Calls from libraries (for example crash reporters using `Runtime.exec`) are downgraded to `warn/medium`.
+- Cleartext URLs found in DEX strings may be logging or configuration endpoints that use HTTP on purpose.
+- For iOS IPA files, mobilepkg checks entitlements, ATS settings, code signing certificates, provisioning profile expiry, URL schemes and associated domains. It does not scan compiled Swift/ObjC binaries for API calls or secrets.
+- WebView argument tracking only looks at the `const/4` or `const/16` instruction just before the call. Arguments loaded from fields or computed values are reported conservatively.
 
 | Format | Platform | Description |
 |--------|----------|-------------|
@@ -50,8 +48,6 @@ It reads the package as a zip archive, parses the manifest and DEX bytecode in-p
 | IPA | iOS | Standard iOS package |
 
 ## Install
-
-mobilepkg is distributed as a Go package, and as prebuilt archives and Linux packages on the [release page](https://github.com/nao1215/mobilepkg/releases).
 
 ### Use "go install"
 
@@ -64,7 +60,7 @@ go get github.com/nao1215/mobilepkg                           # library
 
 ### Download a release artifact
 
-Every release ships `tar.gz` archives for Linux and macOS, `zip` archives for Windows, and `.deb`, `.rpm` and `.apk` packages for Linux, all for `amd64`, `arm64` and `386`. Extract the archive and put the `mobilepkg` binary somewhere on your `PATH`, or install the package for your distribution:
+The [release page](https://github.com/nao1215/mobilepkg/releases) has `tar.gz` archives for Linux and macOS, `zip` archives for Windows, and `.deb`, `.rpm` and `.apk` packages for Linux, all for `amd64`, `arm64` and `386`. Put the `mobilepkg` binary from an archive on your `PATH`, or install a package:
 
 ```bash
 sudo dpkg -i mobilepkg_0.6.0_linux_amd64.deb   # Debian, Ubuntu
@@ -74,13 +70,9 @@ sudo apk add --allow-untrusted mobilepkg_0.6.0_linux_amd64.apk  # Alpine
 
 ## Verifying release integrity
 
-Releases from v0.5.4 on ship supply-chain metadata so you can verify what you download:
+Since v0.5.4, each release has `checksums.txt` signed with [cosign](https://github.com/sigstore/cosign) (keyless, as `checksums.txt.sigstore.json`), an SPDX SBOM per archive (`<archive>.sbom.json`), and SLSA build provenance attested via GitHub OIDC and attached as `multiple.intoto.jsonl`.
 
-- Signed checksums: `checksums.txt` is signed with [cosign](https://github.com/sigstore/cosign) (keyless), producing `checksums.txt.sigstore.json`.
-- SBOM: an SPDX Software Bill of Materials is attached to each release archive as `<archive>.sbom.json`.
-- Build provenance: SLSA build provenance is attested via GitHub OIDC, and is also attached to the release as `multiple.intoto.jsonl`.
-
-Verify the signed checksums (then check your archive against `checksums.txt`):
+Verify the signed checksums, then your archive:
 
 ```shell
 cosign verify-blob \
@@ -91,13 +83,13 @@ cosign verify-blob \
 sha256sum --check --ignore-missing checksums.txt
 ```
 
-Verify the build provenance of a downloaded artifact with the GitHub CLI:
+Verify the build provenance with the GitHub CLI:
 
 ```shell
 gh attestation verify mobilepkg_<version>_<os>_<arch>.tar.gz --repo nao1215/mobilepkg
 ```
 
-Or download the `multiple.intoto.jsonl` release asset and verify the archive against it with [slsa-verifier](https://github.com/slsa-framework/slsa-verifier), which checks the provenance signature against the Sigstore transparency log:
+Or with [slsa-verifier](https://github.com/slsa-framework/slsa-verifier) and the `multiple.intoto.jsonl` asset:
 
 ```shell
 slsa-verifier verify-artifact mobilepkg_<version>_<os>_<arch>.tar.gz \
@@ -108,7 +100,7 @@ slsa-verifier verify-artifact mobilepkg_<version>_<os>_<arch>.tar.gz \
 
 ## CLI
 
-### inspect — Inspect a mobile package
+### inspect
 
 ```bash
 $ mobilepkg inspect app.apk                                # JSON output (default)
@@ -120,98 +112,62 @@ $ mobilepkg inspect --baseline prev.json app.apk           # diff against previo
 
 #### Markdown output
 
-The `--format markdown` output leads with the most actionable information — top findings and severity counts — before expanding into component and endpoint details. It is designed for `$GITHUB_STEP_SUMMARY`, pull request comments, and manual review.
+`--format markdown` puts the top findings and severity counts first, then the component and endpoint details. Use it for `$GITHUB_STEP_SUMMARY`, pull request comments, or reading by hand.
 
 <details>
-<summary>Example: vulnerable app (AndroGoat)</summary>
+<summary>Example: vulnerable app (AndroGoat v2.0.1)</summary>
 
-On an intentionally vulnerable app like [AndroGoat](https://github.com/satishpatnayak/AndroGoat), the report surfaces debug builds, hardcoded AWS keys, command injection via `Runtime.exec`, and unguarded exported components:
+[AndroGoat](https://github.com/satishpatnayak/AndroGoat) is vulnerable on purpose. The first rows of its Top Findings section (17 rows in all):
 
 ```markdown
 ## Top Findings
-> [!WARNING]
-> 10 finding(s) at warning severity or above.
+> [!WARNING]  
+> 17 finding(s) at warning severity or above.
 
 | ID | Severity | Confidence | Message |
-|----|----------|------------|---------|
-| dex.api.java.lang.Runtime.exec... | error | high | Runtime.exec() called — potential command injection risk |
-| dex.secret.aws_key... | error | high | potential aws_key found in DEX string table |
-| manifest.debuggable | error | high | application is debuggable |
-| signing.debug_cert | error | high | signed with debug certificate |
-| dex.cleartext... | warn | medium | cleartext HTTP URL found in DEX strings: demo.testfire.net |
-| manifest.allow_backup | warn | high | application allows backup |
-| exported.provider... | warn | high | exported provider: ...ContentProviderActivity |
-```
-
-</details>
-
-<details>
-<summary>Example: normal app (F-Droid)</summary>
-
-On a well-maintained production app like F-Droid, findings are less severe. Library-originated API calls are flagged at reduced severity. The deep link and endpoint sections show the app's registered URI handlers:
-
-```markdown
-## Top Findings
-> [!WARNING]
-> 6 finding(s) at warning severity or above.
-
-| ID | Severity | Confidence | Message |
-|----|----------|------------|---------|
-| dex.api...Runtime.exec...compat.FileCompat | error | high | Runtime.exec() called (in app code) |
-| dex.api...Runtime.exec...acra... | warn | medium | Runtime.exec() called (in library) |
-| dex.cleartext.logback.qos.ch | warn | medium | cleartext HTTP URL found in DEX strings |
-| manifest.allow_backup | warn | high | application allows backup |
-
-## Network Endpoints
-| Endpoint | Source | Confidence |
-|----------|--------|------------|
-| f-droid.org | intent_filter | high |
-| play.google.com | intent_filter | high |
-| market://details | intent_filter | high |
+|---------|---------|---------|---------|
+| dex.api.java.lang.Runtime.exec.Lowasp.sat.agoat.InputValidationsOSCMDInjectionMain2Activity. | error | high | Runtime.exec() called — potential command injection risk (in Lowasp/sat/agoat/InputValidationsOSCMDInjectionMain2Activity;) |
+| dex.api.java.lang.Runtime.exec.Lowasp.sat.agoat.RootDetectionActivity. | error | high | Runtime.exec() called — potential command injection risk (in Lowasp/sat/agoat/RootDetectionActivity;) |
+| dex.cleartext.demo.testfire.net | warn | medium | cleartext HTTP URL found in DEX strings: demo.testfire.net |
+| dex.secret.aws_key.5c121b1092e4 | error | high | potential aws_key found in DEX string table |
+| dex.webview.setAllowFileAccess.Lowasp.sat.agoat.InputValidationsWebViewURLActivity. | warn | high | WebView file access enabled — may allow reading local files (in Lowasp/sat/agoat/InputValidationsWebViewURLActivity;) |
+| dex.webview.setAllowUniversalAccessFromFileURLs.Lowasp.sat.agoat.InputValidationsWebViewURLActivity. | error | high | WebView universal file access enabled — file:// URLs can access any origin (in Lowasp/sat/agoat/InputValidationsWebViewURLActivity;) |
 ```
 
 </details>
 
 #### JSON output
 
-The default JSON output is a `ReportFile` with `schema_version`, `tool_version`, and `result`:
+The default JSON output is a `ReportFile` with `schema_version`, `tool_version`, and `result`. An excerpt for AndroGoat:
+
+```bash
+$ mobilepkg inspect AndroGoat.apk | jq '{schema_version, identity: .result.identity, debuggable: .result.debuggable, finding: (.result.findings[] | select(.id=="manifest.debuggable"))}'
+```
 
 <details>
-<summary>Example JSON (AndroGoat)</summary>
+<summary>Output</summary>
 
 ```json
 {
   "schema_version": "1.0.0",
-  "tool_version": "0.1.0",
-  "result": {
-    "platform": "android",
-    "format": "apk",
-    "identity": {
-      "identifier": "owasp.sat.agoat",
-      "display_name": "AndroGoat - Insecure App (Kotlin)"
-    },
-    "version": { "marketing": "1.0", "build": "1" },
-    "debuggable": true,
-    "allow_backup": true,
-    "permissions": [
-      { "canonical": "camera",  "raw_name": "android.permission.CAMERA",  "source": "manifest" },
-      { "canonical": "network", "raw_name": "android.permission.INTERNET", "source": "manifest" }
+  "identity": {
+    "identifier": "owasp.sat.agoat",
+    "display_name": "AndroGoat - Insecure App (Kotlin)"
+  },
+  "debuggable": true,
+  "finding": {
+    "id": "manifest.debuggable",
+    "category": "manifest",
+    "severity": "error",
+    "confidence": "high",
+    "message": "application is debuggable — allows arbitrary code execution via adb on any device",
+    "evidence": [
+      {
+        "archive_path": "AndroidManifest.xml",
+        "field": "application[@debuggable]"
+      }
     ],
-    "exported_components": [
-      { "kind": "provider", "name": "owasp.sat.agoat.ContentProviderActivity", "exported": true },
-      { "kind": "receiver", "name": "owasp.sat.agoat.ShowDataReceiver",       "exported": true }
-    ],
-    "signing": {
-      "scheme": "v1+v2",
-      "certificates": [{ "subject": "Android Debug", "issuer": "Android Debug" }]
-    },
-    "findings": [
-      { "severity": "error", "id": "manifest.debuggable",  "message": "application is debuggable" },
-      { "severity": "error", "id": "signing.debug_cert",    "message": "signed with debug certificate" },
-      { "severity": "warn",  "id": "manifest.allow_backup", "message": "application allows backup" }
-    ],
-    "secret_candidates": [],
-    "diagnostics": []
+    "fingerprint": "cfdad16a5de2d41e"
   }
 }
 ```
@@ -220,7 +176,7 @@ The default JSON output is a `ReportFile` with `schema_version`, `tool_version`,
 
 #### Baseline diff and CI
 
-Save a report and use it as the baseline for the next run. The `--baseline` flag accepts a `report.json` file produced by a previous `inspect` run:
+`--baseline` takes the JSON report of a previous `inspect` run:
 
 ```bash
 # Save today's result
@@ -230,19 +186,19 @@ mobilepkg inspect app.apk > baseline.json
 mobilepkg inspect --baseline baseline.json --fail-on warn app.apk
 ```
 
-When `--fail-on` is specified, the output includes a `verdict` field with `passed`, `reasons`, and `triggering_findings`, and the command exits with code 1 if the policy is violated.
+With `--fail-on`, the output has a `verdict` field with `passed`, `reasons`, and `triggering_findings`, and the command exits 1 when the policy fails.
 
-### compare — Compare two packages
+### compare
 
 ```bash
 $ mobilepkg compare old.apk new.apk
 ```
 
-Shows identity, version, and entry point changes, plus added/removed permissions, exported components, and network endpoints.
+It prints identity, version and entry point changes, and the permissions, exported components and network endpoints that were added or removed.
 
 ## Library
 
-### InspectFile — One call, full result
+### InspectFile
 
 ```go
 result, err := mobilepkg.InspectFile(ctx, "app.apk")
@@ -301,13 +257,6 @@ mobilepkg.WriteSummaryMarkdown(os.Stdout, rf)   // Markdown
 mobilepkg.WriteRDJSONL(os.Stdout, result.Findings, "app.apk") // reviewdog
 ```
 
-## GitHub Actions
-
-```yaml
-- run: mobilepkg inspect --fail-on warn app.apk > report.json
-- run: mobilepkg inspect --format markdown app.apk >> "$GITHUB_STEP_SUMMARY"
-```
-
 ## Testing
 
 | Technique | Bug class caught here |
@@ -321,7 +270,7 @@ mobilepkg.WriteRDJSONL(os.Stdout, result.Findings, "app.apk") // reviewdog
 | [Mutation testing](doc/testing.md#mutation-testing) | Tests that still pass when a comparison or branch is changed |
 | [Paired CI benchmarks](doc/testing.md#paired-ci-benchmarks) | Slower inspection hidden by runner noise |
 
-## Test Data
+## Test data
 
 Examples use [AndroGoat](https://github.com/satishpatnayak/AndroGoat) ([v2.0.1](https://github.com/satishpatnayak/AndroGoat/releases/tag/v2.0.1)), an intentionally vulnerable Android app. The APK is under `testdata/no_commit/` for local testing only and is not committed.
 
@@ -339,7 +288,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 [Sponsor this project](https://github.com/sponsors/nao1215)
 
-## Related or inspired Projects
+## Related projects
 
 - [shogo82148/androidbinary](https://github.com/shogo82148/androidbinary): Android binary file parser written in golang
 - [nao1215/deapk(already public archived)](https://github.com/nao1215/deapk): parse android package (.apk), getting meta data and more.
